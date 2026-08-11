@@ -111,19 +111,24 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f8f5f0;color:#1e293b;ov
 .banner-saved-dot{width:6px;height:6px;border-radius:50%;background:#16a34a;display:none;flex-shrink:0}
 .banner-saved-dot.show{display:inline-block}
 
-.panel-edit-btn{font-size:10.5px;padding:3px 10px;border-radius:4px;border:1px solid #d1c4b8;background:#faf7f4;color:#3d2b1f;cursor:pointer;font-family:inherit;margin-top:4px;display:inline-block}
 .panel-edit-btn:hover{background:#ede8e2}
-.panel-edit-btn.editing{background:#d97706;color:#fff;border-color:#d97706}
-.panel-save-btn{font-size:10.5px;padding:3px 10px;border-radius:4px;border:1px solid #16a34a;background:#16a34a;color:#fff;cursor:pointer;font-family:inherit;display:none;margin-left:6px}
 .panel-save-btn:hover{background:#15803d}
-.panel-cancel-btn{font-size:10.5px;padding:3px 10px;border-radius:4px;border:1px solid #d1c4b8;background:#faf7f4;color:#6b7a99;cursor:pointer;font-family:inherit;display:none;margin-left:4px}
 .panel-cancel-btn:hover{background:#ede8e2}
-.pf-editable{width:100%;min-height:60px;padding:8px 10px;font-size:11.5px;font-family:inherit;line-height:1.65;color:#3d2b1f;background:#faf7f4;border:1px solid #d1c4b8;border-radius:6px;resize:vertical;display:none}
-.pf-editable:focus{outline:none;border-color:#d97706;box-shadow:0 0 0 2px rgba(217,119,6,.12)}
-.pf-editable.single{min-height:34px;resize:none;overflow:hidden}
-.pf-cond-editable{width:100%;min-height:50px;padding:8px 10px;font-size:11px;font-family:'Consolas','Courier New',monospace;line-height:1.6;color:#92400e;background:#faf7f4;border:1px solid #d1c4b8;border-left:3px solid #d97706;border-radius:6px;resize:vertical;display:none}
-.pf-cond-editable:focus{outline:none;border-color:#d97706}
-.panel-saved-flash{font-size:10px;color:#16a34a;margin-left:8px;display:none;font-weight:500}
+
+
+.model-notes-btn{position:fixed;bottom:16px;right:16px;z-index:8000;background:#fff;border:1px solid #d1c4b8;border-radius:50%;width:40px;height:40px;font-size:18px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);display:flex;align-items:center;justify-content:center;transition:box-shadow .15s}
+.model-notes-btn:hover{box-shadow:0 3px 14px rgba(0,0,0,.2)}
+#model-notes-panel{position:fixed;bottom:64px;right:16px;z-index:8000;background:#fff;border:1px solid #d1c4b8;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.15);width:300px;display:none}
+#model-notes-panel.open{display:block}
+#mn-header{padding:10px 14px 8px;border-bottom:1px solid #ede8e2;display:flex;align-items:center;justify-content:space-between}
+#mn-header h4{font-size:12px;font-weight:600;color:#3d2b1f}
+#mn-header span{font-size:9.5px;color:#a08070}
+#mn-ta{width:100%;height:140px;padding:10px 12px;font-size:11.5px;font-family:inherit;border:none;resize:none;color:#3d2b1f;background:#faf7f4;border-radius:0}
+#mn-ta:focus{outline:none}
+#mn-footer{padding:6px 12px 8px;display:flex;align-items:center;gap:8px;border-top:1px solid #ede8e2}
+.mn-save-btn{font-size:10.5px;padding:3px 10px;border-radius:4px;border:1px solid #16a34a;background:#16a34a;color:#fff;cursor:pointer;font-family:inherit}
+.mn-save-btn:hover{background:#15803d}
+.mn-saved{font-size:10px;color:#16a34a;display:none}
 
 .notes-area{width:100%;min-height:90px;padding:8px 10px;font-size:11.5px;font-family:inherit;line-height:1.6;color:#3d2b1f;background:#faf7f4;border:1px solid #d1c4b8;border-radius:6px;resize:vertical;margin-bottom:6px}
 .notes-area:focus{outline:none;border-color:#d97706;box-shadow:0 0 0 2px rgba(217,119,6,.15)}
@@ -148,17 +153,6 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f8f5f0;color:#1e293b;ov
       <h1>Raymond James — TBM Datalink Pipeline</h1>
       <p>Hover any line for quick summary · Click any line or node for details · Edit mode: drag nodes, line elbows, or endpoint dots</p>
     </div>
-    <div class="banner-meta">
-      <div class="banner-field-wrap">
-        <span class="banner-field-label">Copy name:</span>
-        <input type="text" id="banner-copy-name" class="banner-field" placeholder="e.g. Caroline's Copy" oninput="onBannerNameChange(this.value)" title="Give this copy a name so it's easy to identify when shared">
-      </div>
-      <div class="banner-field-wrap">
-        <span class="banner-field-label">Last edited:</span>
-        <input type="date" id="banner-last-edited" class="banner-field date-field" oninput="onBannerDateChange(this.value)" title="Date stamp this copy">
-      </div>
-      <span id="banner-saved-dot" class="banner-saved-dot" title="Saved"></span>
-    </div>
     <div class="legend">
       <div class="leg"><div class="leg-line" style="background:#7c3aed"></div>→ Consumption</div>
       <div class="leg"><div class="leg-line" style="background:#0d9488"></div>↔ IT Towers</div>
@@ -170,6 +164,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f8f5f0;color:#1e293b;ov
   </div>
   <div id="toolbar">
     <button class="tbtn" id="btn-edit" onclick="toggleEditMode()">✏️ Edit Layout</button>
+    <button class="tbtn-sm" id="btn-publish-layout" onclick="publishLayout()" style="display:none;margin-left:4px">📡 Publish Layout</button>
     <button class="tbtn-sm" onclick="exportFullSnapshot()" style="margin-left:8px">📤 Export Snapshot</button>
     <span id="edit-indicator">● Edit mode — drag nodes, line elbows, or endpoint dots</span>
     <button class="tbtn-sm" id="btn-save" onclick="saveLayout()" style="display:none">💾 Save Layout</button>
@@ -475,42 +470,6 @@ loadFieldEdits(); (function(){try{if(!localStorage.getItem(NOTES_KEY))localStora
 
 const NOTES_KEY='rj_pipeline_notes_v1';
 
-const BANNER_KEY='rj_pipeline_banner_v1';
-let bannerMeta={"copyName":"","lastEdited":"2026-08-07"};
-
-function loadBannerMeta(){
-  try{
-    const d=localStorage.getItem(BANNER_KEY);
-    if(d) bannerMeta=JSON.parse(d);
-  }catch(e){}
-}
-function saveBannerMeta(){
-  try{localStorage.setItem(BANNER_KEY,JSON.stringify(bannerMeta));}catch(e){}
-}
-function onBannerNameChange(val){
-  bannerMeta.copyName=val;
-  saveBannerMeta();
-  flashBannerSaved();
-}
-function onBannerDateChange(val){
-  bannerMeta.lastEdited=val;
-  saveBannerMeta();
-  flashBannerSaved();
-}
-function flashBannerSaved(){
-  const dot=document.getElementById('banner-saved-dot');
-  if(!dot) return;
-  dot.classList.add('show');
-  setTimeout(()=>dot.classList.remove('show'),1800);
-}
-function initBanner(){
-  loadBannerMeta();
-  const nameEl=document.getElementById('banner-copy-name');
-  const dateEl=document.getElementById('banner-last-edited');
-  if(nameEl) nameEl.value=bannerMeta.copyName||'';
-  if(dateEl) dateEl.value=bannerMeta.lastEdited||'';
-}
-loadBannerMeta();
 
 function loadNote(id){try{const d=localStorage.getItem(NOTES_KEY);return d?JSON.parse(d)[id]||'':'';}catch(e){return '';}}
 function saveNote(id){
@@ -653,7 +612,7 @@ function exportFullSnapshot(){
   
   // Disable live Google Sheets sync in snapshot — show standalone message instead
   snap = snap.replace(
-    "window.addEventListener('load',()=>{setTimeout(syncFromSheets,400);});",
+    "window.addEventListener('load',()=>{setTimeout(async()=>{await loadLayoutFromSheet();await syncFromSheets();},400);});",
     "window.addEventListener('load',()=>{setTimeout(()=>setSyncState('ok','📦 Standalone snapshot exported "+stateData.exported+" — data baked in'),400);});"
   );
 
@@ -972,7 +931,7 @@ function toggleEditMode(){
   editMode=!editMode;
   document.getElementById('btn-edit').classList.toggle('active',editMode);
   document.getElementById('edit-indicator').style.display=editMode?'inline':'none';
-  ['btn-save','btn-reset','btn-reset-lines','btn-reset-eps','btn-export','btn-snapshot','btn-import-lbl'].forEach(id=>{
+  ['btn-save','btn-reset','btn-reset-lines','btn-reset-eps','btn-export','btn-snapshot','btn-import-lbl','btn-publish-layout'].forEach(id=>{
     document.getElementById(id).style.display=editMode?'inline-block':'none';
   });
 }
@@ -1066,232 +1025,75 @@ function getPos(e){
 // ═══════════════════════════════════════════
 // PANEL
 // ═══════════════════════════════════════════
-function renderAllocPanel(a, editing){
-  const fn=N[a.from],tn=N[a.to];
-  const id=a.id;
-  // Get current values (edited or default)
-  const name     = getField(id,'name',     a.name);
-  const overview = getField(id,'overview', a.overview);
-  const layman   = getField(id,'layman',   a.layman);
-  const fromCond = getField(id,'fromCond', a.fromCond);
-  const toCond   = getField(id,'toCond',   a.toCond);
-
-  document.getElementById('panel-title').textContent=name;
+function renderAllocPanel(a){
+  document.getElementById('panel-title').textContent=a.name;
   document.getElementById('panel-type').textContent='Allocation rule';
-
-  function viewField(val, cls='pf'){
-    return `<div class="${cls}">${val||'—'}</div>`;
-  }
-  function editField(fid, val, cls='pf-editable', rows=3){
-    const single=rows===1?'single':'';
-    return `<textarea class="${cls} ${single}" id="ef-${fid}" rows="${rows}">${val||''}</textarea>`;
-  }
-  function condField(val, isEmpty){
-    if(editing) return `<textarea class="pf-cond-editable" id="ef-fromcond-placeholder" rows="2">${val}</textarea>`;
-    return isEmpty ? '<p class="pnc">No conditions — all records included</p>' : viewField(val,'pc');
-  }
-
+  const fn=N[a.from],tn=N[a.to];
   let h=`<div class="pft">
     <span class="pbf">${fn?.lbl.join(' ')||a.from}</span>
     <span class="parr">→</span>
     <span class="pbt">${tn?.lbl.join(' ')||a.to}</span>
   </div>`;
-
-  // Edit/Save/Cancel buttons
-  h+=`<div style="margin-bottom:10px">
-    <button class="panel-edit-btn${editing?' editing':''}" id="panel-edit-btn" onclick="toggleAllocEdit('${id}',${!editing})">${editing?'✏️ Editing...':'✏️ Edit Fields'}</button>
-    <button class="panel-save-btn" id="panel-save-btn" style="display:${editing?'inline-block':'none'}" onclick="saveAllocEdits('${id}')">💾 Save Changes</button>
-    <button class="panel-cancel-btn" id="panel-cancel-btn" style="display:${editing?'inline-block':'none'}" onclick="renderAllocPanel(ALLOCS.find(x=>x.id==='${id}'),false);updatePanelTitle('${id}')">Cancel</button>
-    <span class="panel-saved-flash" id="panel-saved-flash"></span>
-  </div>`;
-
-  // Name field
-  h+=`<div class="psl">Allocation Name</div>`;
-  if(editing){
-    h+=`<input type="text" class="pf-editable single" id="ef-name" style="display:block;width:100%;padding:6px 10px;font-size:12px;font-family:inherit;border:1px solid #d1c4b8;border-radius:6px;background:#faf7f4;color:#3d2b1f" value="${name.replace(/"/g,'&quot;')}">`;
-  } else {
-    h+=viewField(name);
-  }
-
-  h+=`<div class="psl">Technical overview</div>`;
-  if(editing){ h+=`<textarea class="pf-editable" id="ef-overview" style="display:block" rows="4">${overview}</textarea>`; }
-  else { h+=viewField(overview); }
-
-  h+=`<div class="psl">In plain terms</div>`;
-  if(editing){ h+=`<textarea class="pf-editable pfl" id="ef-layman" style="display:block" rows="4">${layman}</textarea>`; }
-  else { h+=`<div class="pf pfl">${layman||'—'}</div>`; }
-
+  h+=`<div class="psl">Technical overview</div><div class="pf">${a.overview||'—'}</div>`;
+  h+=`<div class="psl">In plain terms</div><div class="pf pfl">${a.layman||'—'}</div>`;
   h+=`<div class="psl">From conditions</div>`;
-  if(editing){
-    h+=`<textarea class="pf-cond-editable" id="ef-fromCond" style="display:block" rows="3">${fromCond&&fromCond!=='None'?fromCond:''}</textarea>`;
-  } else {
-    h+= fromCond&&fromCond!=='None' ? viewField(fromCond,'pc') : '<p class="pnc">No conditions — all records included</p>';
-  }
-
+  h+=a.fromCond&&a.fromCond!=='None'?`<div class="pc">${a.fromCond}</div>`:'<p class="pnc">No conditions — all records included</p>';
   h+=`<div class="psl">To conditions</div>`;
-  if(editing){
-    h+=`<textarea class="pf-cond-editable" id="ef-toCond" style="display:block" rows="3">${toCond&&toCond!=='None'?toCond:''}</textarea>`;
-  } else {
-    h+= toCond&&toCond!=='None' ? viewField(toCond,'pc') : '<p class="pnc">No conditions on destination</p>';
-  }
-
-  // Notes
-  const existingNote=loadNote(id);
-  h+=`<div class="psl" style="margin-top:16px">Notes</div>`;
-  h+=`<textarea class="notes-area" id="note-ta-${id}" placeholder="Add your notes about this allocation...">${existingNote}</textarea>`;
-  h+=`<div class="notes-row"><button class="notes-save-btn" onclick="saveNote('${id}')">💾 Save Note</button><span class="notes-saved-msg" id="note-saved-${id}">✓ Saved</span></div>`;
-
+  h+=a.toCond&&a.toCond!=='None'?`<div class="pc">${a.toCond}</div>`:'<p class="pnc">No conditions on destination</p>';
+  h+=`<div class="psl" style="margin-top:16px">Notes <span style="font-size:9px;color:#a08070;font-weight:400">(shared — saved to Google Sheets)</span></div>`;
+  h+=`<textarea class="notes-area" id="note-ta-${a.id}" placeholder="Add notes for your team...">${a.notes||''}</textarea>`;
+  h+=`<div class="notes-row"><button class="notes-save-btn" onclick="saveAllocNote('${a.id}')">💾 Save Note</button><span class="notes-saved-msg" id="note-saved-${a.id}">✓ Saved to Sheet</span></div>`;
   document.getElementById('panel-body').innerHTML=h;
 }
 
 
-function toggleAccordion(bodyId, rowEl){
-  const body = document.getElementById(bodyId);
-  const chevId = bodyId.replace('acc-','chev-');
-  const chev = document.getElementById(chevId);
-  if(!body) return;
-  const isOpen = body.classList.contains('open');
-  body.classList.toggle('open', !isOpen);
-  if(chev) chev.classList.toggle('open', !isOpen);
-}
-
-function toggleAllocEdit(id, editing){
-  const a=ALLOCS.find(x=>x.id===id); if(!a) return;
-  renderAllocPanel(a, editing);
-}
-
-function saveAllocEdits(id){
-  const a=ALLOCS.find(x=>x.id===id); if(!a) return;
-  const nameEl=document.getElementById('ef-name');
-  const ovEl=document.getElementById('ef-overview');
-  const layEl=document.getElementById('ef-layman');
-  const fcEl=document.getElementById('ef-fromCond');
-  const tcEl=document.getElementById('ef-toCond');
-  if(nameEl)    setField(id,'name',    nameEl.value.trim()||a.name);
-  if(ovEl)      setField(id,'overview',ovEl.value.trim()||a.overview);
-  if(layEl)     setField(id,'layman',  layEl.value.trim()||a.layman);
-  if(fcEl)      setField(id,'fromCond',fcEl.value.trim()||a.fromCond);
-  if(tcEl)      setField(id,'toCond',  tcEl.value.trim()||a.toCond);
-  renderAllocPanel(a, false);
-  updatePanelTitle(id);
-  // Flash saved
-  const fl=document.getElementById('panel-saved-flash');
-  if(fl){fl.textContent='✓ Saved';fl.style.display='inline';setTimeout(()=>fl.style.display='none',2000);}
-}
-
-function updatePanelTitle(id){
-  const a=ALLOCS.find(x=>x.id===id);
-  if(a) document.getElementById('panel-title').textContent=getField(id,'name',a.name);
-}
-
 function openAllocPanel(a){
   selA=a; selN=null;
-  renderAllocPanel(a, false);
+  renderAllocPanel(a);
   document.getElementById('side-panel').classList.add('open');
   render();
 }
 
-function renderNodePanel(n, editing){
+function renderNodePanel(n){
   const id=n.id;
-  const desc=getField(id,'desc',n.desc);
-  document.getElementById('panel-title').textContent=n.lbl.join(' ');
-  document.getElementById('panel-type').textContent='Pipeline object';
-
   const inb=ALLOCS.filter(a=>a.to===id);
   const outb=ALLOCS.filter(a=>a.from===id);
-
-  let h=`<div style="margin-bottom:10px">
-    <button class="panel-edit-btn${editing?' editing':''}" onclick="toggleNodeEdit('${id}',${!editing})">${editing?'✏️ Editing...':'✏️ Edit Description'}</button>
-    <button class="panel-save-btn" style="display:${editing?'inline-block':'none'}" onclick="saveNodeEdits('${id}')">💾 Save Changes</button>
-    <button class="panel-cancel-btn" style="display:${editing?'inline-block':'none'}" onclick="renderNodePanel(N['${id}'],false)">Cancel</button>
-    <span class="panel-saved-flash" id="panel-saved-flash-n"></span>
-  </div>`;
-
-  h+=`<div class="psl">What this object represents</div>`;
-  if(editing){
-    h+=`<textarea class="pf-editable" id="ef-node-desc" style="display:block" rows="5">${desc}</textarea>`;
-  } else {
-    h+=`<div class="ndesc">${desc}</div>`;
-  }
-
+  document.getElementById('panel-title').textContent=n.lbl.join(' ');
+  document.getElementById('panel-type').textContent='Pipeline object';
+  let h=`<div class="psl">What this object represents</div><div class="ndesc">${n.desc}</div>`;
   if(n.driver){
     h+=`<div class="psl">Model driver</div>`;
     h+=`<div class="driver-box"><strong>Add to:</strong> ${n.driver.addTo}<div class="driver-formula">${n.driver.formula}</div></div>`;
   }
-
-  function allocAccordionRow(a, direction){
-    const other = direction==='in' ? N[a.from] : N[a.to];
-    const otherLabel = other?.lbl.join(' ') || (direction==='in'?a.from:a.to);
-    const aname = getField(a.id,'name',a.name);
-    const aoverview = getField(a.id,'overview',a.overview);
-    const alayman = getField(a.id,'layman',a.layman);
-    const afromCond = getField(a.id,'fromCond',a.fromCond);
-    const atoCond = getField(a.id,'toCond',a.toCond);
-    const note = loadNote(a.id);
-    const badge = direction==='in'
-      ? `<span class="ib">IN</span>`
-      : `<span class="ob">OUT</span>`;
-    const dirLabel = direction==='in'
-      ? `From: ${otherLabel}`
-      : `To: ${otherLabel}`;
-
-    const condFrom = afromCond&&afromCond!=='None'
-      ? `<div class="arow-detail-cond">${afromCond}</div>`
-      : `<p class="arow-no-cond">No conditions — all records included</p>`;
-    const condTo = atoCond&&atoCond!=='None'
-      ? `<div class="arow-detail-cond">${atoCond}</div>`
-      : `<p class="arow-no-cond">No conditions on destination</p>`;
-    const noteHtml = note
-      ? `<div class="arow-detail-sec">Notes</div><div class="arow-notes-box">${note}</div>`
-      : '';
-
+  function allocRow(a,dir){
+    const other=dir==='in'?N[a.from]:N[a.to];
+    const otherLbl=other?.lbl.join(' ')||(dir==='in'?a.from:a.to);
+    const badge=dir==='in'?'<span class="ib">IN</span>':'<span class="ob">OUT</span>';
+    const condFrom=a.fromCond&&a.fromCond!=='None'?`<div class="arow-detail-cond">${a.fromCond}</div>`:'<p class="arow-no-cond">No conditions</p>';
+    const condTo=a.toCond&&a.toCond!=='None'?`<div class="arow-detail-cond">${a.toCond}</div>`:'<p class="arow-no-cond">No conditions</p>';
+    const noteHtml=a.notes?`<div class="arow-detail-sec">Notes</div><div class="arow-notes-box">${a.notes}</div>`:'';
     return `<div class="arow" onclick="toggleAccordion('acc-${a.id}',this)">
       <div class="arow-header">
-        <div><div class="arname">${badge}${aname}</div><div class="ardir">${dirLabel}</div></div>
+        <div><div class="arname">${badge}${a.name}</div><div class="ardir">${dir==='in'?'From':'To'}: ${otherLbl}</div></div>
         <span class="arow-chevron" id="chev-${a.id}">›</span>
       </div>
       <div class="arow-body" id="acc-${a.id}">
-        <div class="arow-detail-sec">Technical overview</div>
-        <div class="arow-detail-box">${aoverview}</div>
-        <div class="arow-detail-sec">In plain terms</div>
-        <div class="arow-detail-box layman">${alayman}</div>
-        <div class="arow-detail-sec">From conditions</div>
-        ${condFrom}
-        <div class="arow-detail-sec">To conditions</div>
-        ${condTo}
+        <div class="arow-detail-sec">Technical overview</div><div class="arow-detail-box">${a.overview||'—'}</div>
+        <div class="arow-detail-sec">In plain terms</div><div class="arow-detail-box layman">${a.layman||'—'}</div>
+        <div class="arow-detail-sec">From conditions</div>${condFrom}
+        <div class="arow-detail-sec">To conditions</div>${condTo}
         ${noteHtml}
-      </div>
-    </div>`;
+      </div></div>`;
   }
-
-  if(inb.length){
-    h+=`<div class="psl">Inbound allocations</div><div class="csec">${inb.length} rule${inb.length>1?'s':''} in</div>`;
-    inb.forEach(a=>{ h+=allocAccordionRow(a,'in'); });
-  }
-  if(outb.length){
-    h+=`<div class="psl" style="margin-top:14px">Outbound allocations</div><div class="csec">${outb.length} rule${outb.length>1?'s':''} out</div>`;
-    outb.forEach(a=>{ h+=allocAccordionRow(a,'out'); });
-  }
+  if(inb.length){h+=`<div class="psl">Inbound</div><div class="csec">${inb.length} rule${inb.length>1?'s':''} in</div>`;inb.forEach(a=>{h+=allocRow(a,'in');});}
+  if(outb.length){h+=`<div class="psl" style="margin-top:14px">Outbound</div><div class="csec">${outb.length} rule${outb.length>1?'s':''} out</div>`;outb.forEach(a=>{h+=allocRow(a,'out');});}
   document.getElementById('panel-body').innerHTML=h;
 }
 
-function toggleNodeEdit(id, editing){
-  const n=N[id]; if(!n) return;
-  renderNodePanel(n, editing);
-}
-
-function saveNodeEdits(id){
-  const n=N[id]; if(!n) return;
-  const el=document.getElementById('ef-node-desc');
-  if(el) setField(id,'desc',el.value.trim()||n.desc);
-  renderNodePanel(n, false);
-  const fl=document.getElementById('panel-saved-flash-n');
-  if(fl){fl.textContent='✓ Saved';fl.style.display='inline';setTimeout(()=>fl.style.display='none',2000);}
-}
 
 function openNodePanel(n){
   selN=n; selA=null;
-  renderNodePanel(n, false);
+  renderNodePanel(n);
   document.getElementById('side-panel').classList.add('open');
   render();
 }
@@ -1418,9 +1220,9 @@ canvas.addEventListener('mousemove',e=>{
   if(a){
     canvas.style.cursor='pointer';
     const fn=N[a.from],tn=N[a.to];
-    document.getElementById('ttn').textContent=getField(a.id,'name',a.name);
+    document.getElementById('ttn').textContent=a.name;
     document.getElementById('ttft').textContent=(fn?.lbl[0]||a.from)+' → '+(tn?.lbl[0]||a.to);
-    document.getElementById('ttb').textContent=getField(a.id,'layman',a.layman);
+    document.getElementById('ttb').textContent=a.layman;
     const tt=document.getElementById('tooltip');
     tt.style.display='block';
     let tx=e.clientX+14,ty=e.clientY-10;
@@ -1537,63 +1339,238 @@ function applySheetRows(rows) {
   return updated;
 }
 
-async function syncFromSheets() {
+async function syncFromSheets(){
   setSyncState('loading','Syncing with Google Sheets...');
   try{
-    // Use a CORS proxy approach via Google's own export endpoint
-    const resp = await fetch(SHEETS_CSV_URL);
+    const resp=await fetch(SHEETS_CSV_URL);
     if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const text = await resp.text();
-    const lines = text.split(/\r?\n/).filter(l=>l.trim());
+    const text=await resp.text();
+    const lines=text.split(/\r?\n/).filter(l=>l.trim());
     if(lines.length<2) throw new Error('Sheet appears empty');
-    
-    // Parse headers
-    const headers = parseCSVLine(lines[0]).map(h=>{
-      const mapped = {};
-      const fieldMap2 = {
+
+    // Parse headers — normalize to lowercase
+    const rawHeaders=parseCSVLine(lines[0]);
+    const headers=rawHeaders.map(h=>{
+      const lc=h.toLowerCase().trim();
+      const map={
         'from (source object)':'from','to (destination object)':'to',
-        'allocation name':'name','from conditions':'fromCond',
-        'to conditions':'toCond',
+        'allocation name':'name','from conditions':'fromcond',
+        'to conditions':'tocond',
         'allocation overview / strategy / purpose':'overview',
-        "layman\'s summary (elevator pitch)":'layman',
-        'from':'from','to':'to','name':'name','fromcond':'fromCond',
-        'tocond':'toCond','overview':'overview','layman':'layman'
+        "layman's summary (elevator pitch)":'layman',
+        'from':'from','to':'to','name':'name',
+        'fromcond':'fromcond','tocond':'tocond',
+        'overview':'overview','layman':'layman','notes':'notes'
       };
-      return fieldMap2[h.toLowerCase()]||h.toLowerCase();
+      return map[lc]||lc;
     });
-    
-    // Parse rows
-    const rows=[];
+
+    // Parse data rows
+    const sheetRows=[];
     for(let i=1;i<lines.length;i++){
       const cols=parseCSVLine(lines[i]);
       if(!cols.some(c=>c)) continue;
       const row={};
       headers.forEach((h,idx)=>{row[h]=(cols[idx]||'').trim();});
-      rows.push(row);
+      sheetRows.push(row);
     }
-    
-    const updated=applySheetRows(rows);
+
+    // Load saved notes from localStorage (in case sheet notes not yet populated)
+    let savedNotes={};
+    try{const d=localStorage.getItem(NOTES_KEY);if(d) savedNotes=JSON.parse(d);}catch(e){}
+
+    // Track which alloc IDs we've seen (to detect new ones)
+    const existingIds=new Set(ALLOCS.map(a=>a.id));
+    let updated=0, added=0;
+
+    sheetRows.forEach(row=>{
+      if(!row.from||!row.to||!row.name) return;
+      const csvFrom=row.from.trim().toLowerCase();
+      const csvTo=row.to.trim().toLowerCase();
+      const csvName=row.name.trim().toLowerCase();
+
+      // Find matching node IDs
+      const fromNode=NODES.find(n=>n.lbl.join(' ').toLowerCase()===csvFrom||n.id.toLowerCase()===csvFrom);
+      const toNode=NODES.find(n=>n.lbl.join(' ').toLowerCase()===csvTo||n.id.toLowerCase()===csvTo);
+
+      // Try to match existing alloc
+      let alloc=ALLOCS.find(a=>{
+        const fn=N[a.from]?.lbl.join(' ').toLowerCase()||a.from.toLowerCase();
+        const tn=N[a.to]?.lbl.join(' ').toLowerCase()||a.to.toLowerCase();
+        return fn===csvFrom&&tn===csvTo&&a.name.toLowerCase()===csvName;
+      });
+
+      // Fallback: match by from+to if unique
+      if(!alloc&&fromNode&&toNode){
+        const cands=ALLOCS.filter(a=>a.from===fromNode.id&&a.to===toNode.id);
+        if(cands.length===1) alloc=cands[0];
+      }
+
+      if(alloc){
+        // Update existing alloc fields
+        if(row.name)     alloc.name    =row.name;
+        if(row.overview) alloc.overview=row.overview;
+        if(row.layman)   alloc.layman  =row.layman;
+        if(row.fromcond) alloc.fromCond=row.fromcond;
+        if(row.tocond)   alloc.toCond  =row.tocond;
+        // Notes: use sheet value if present, else localStorage
+        alloc.notes=row.notes||(savedNotes[alloc.id]||'');
+        updated++;
+      } else if(fromNode&&toNode){
+        // NEW allocation — create it dynamically!
+        const newId='sheet_'+(row.name||'').replace(/[^a-z0-9]/gi,'_').toLowerCase().slice(0,30)+'_'+Date.now();
+        const newAlloc={
+          id:newId,
+          from:fromNode.id,
+          to:toNode.id,
+          name:row.name||'Unnamed',
+          fromCond:row.fromcond||'None',
+          toCond:row.tocond||'None',
+          overview:row.overview||'',
+          layman:row.layman||'',
+          notes:row.notes||'',
+          _pt:1,_pi:0,_dynamic:true
+        };
+        ALLOCS.push(newAlloc);
+        added++;
+      }
+    });
+
+    // Recompute pair groups for dynamic allocs
+    const pairG={};
+    ALLOCS.forEach(a=>{
+      const k=a.from+'→'+a.to;
+      if(!pairG[k]) pairG[k]=[];
+      pairG[k].push(a.id);
+    });
+    ALLOCS.forEach(a=>{
+      const k=a.from+'→'+a.to;
+      a._pt=pairG[k].length;
+      a._pi=pairG[k].indexOf(a.id);
+    });
+
+    recomputeAll();
+    render();
+
     const ts=new Date().toLocaleTimeString();
-    setSyncState('ok',`✓ Synced from Google Sheets — ${rows.length} allocations · Last updated: ${ts}`);
-    
-    // Re-render panel if open
-    if(selA) renderAllocPanel(selA,false);
-    if(selN) renderNodePanel(selN,false);
-    
+    let msg=`✓ Synced — ${sheetRows.length} allocations`;
+    if(added>0) msg+=` · ${added} new arrow${added>1?'s':''} added`;
+    msg+=` · Last sync: ${ts}`;
+    setSyncState('ok',msg);
+
+    if(selA) renderAllocPanel(selA);
+    if(selN) renderNodePanel(selN);
+
   }catch(err){
     if(err.message.includes('Failed to fetch')||err.message.includes('NetworkError')){
-      setSyncState('error','⚠ Could not reach Google Sheets — check your internet connection or Sheet permissions');
+      setSyncState('error','⚠ Could not reach Google Sheets — check permissions (Share → Anyone with link)');
     }else{
       setSyncState('error',`⚠ Sync error: ${err.message}`);
     }
   }
 }
 
+
 // Auto-sync on page load
-window.addEventListener('load',()=>{setTimeout(syncFromSheets,400);});
+window.addEventListener('load',()=>{setTimeout(async()=>{await loadLayoutFromSheet();await syncFromSheets();},400);});
+
+
+// ── PRIVATE MODEL NOTES (browser only) ───────────────────────
+const MODEL_NOTES_KEY='rj_model_notes_v1';
+function toggleModelNotes(){
+  const p=document.getElementById('model-notes-panel');
+  p.classList.toggle('open');
+  if(p.classList.contains('open')){
+    try{document.getElementById('mn-ta').value=localStorage.getItem(MODEL_NOTES_KEY)||'';}catch(e){}
+    document.getElementById('mn-ta').focus();
+  }
+}
+function saveModelNotes(){
+  try{localStorage.setItem(MODEL_NOTES_KEY,document.getElementById('mn-ta').value);}catch(e){}
+  const s=document.getElementById('mn-saved');
+  s.style.display='inline';setTimeout(()=>s.style.display='none',2000);
+}
+
+
+// ── ALLOC NOTES (shared via Google Sheets) ────────────────────
+function saveAllocNote(allocId){
+  const ta=document.getElementById('note-ta-'+allocId);
+  if(!ta) return;
+  const noteText=ta.value.trim();
+  // Update in-memory alloc
+  const a=ALLOCS.find(x=>x.id===allocId);
+  if(a) a.notes=noteText;
+  // Save to NOTES_KEY for persistence between syncs
+  try{
+    const d=localStorage.getItem(NOTES_KEY);
+    const obj=d?JSON.parse(d):{};
+    obj[allocId]=noteText;
+    localStorage.setItem(NOTES_KEY,JSON.stringify(obj));
+  }catch(e){}
+  const msg=document.getElementById('note-saved-'+allocId);
+  if(msg){msg.style.display='inline';setTimeout(()=>msg.style.display='none',2000);}
+  // Re-render any open node panel to reflect note change
+  if(selN) renderNodePanel(selN);
+}
+
+
+// ── LAYOUT SHEET SYNC ─────────────────────────────────────────
+// Layout is stored in a second sheet tab called "Layout"
+// Publish Layout writes positions; page load reads them
+const LAYOUT_SHEET_URL='https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/export?format=csv&sheet=Layout&gid=';
+
+async function loadLayoutFromSheet(){
+  try{
+    // Try to load Layout sheet
+    const resp=await fetch('https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/export?format=csv&gid=1');
+    if(!resp.ok) return; // Layout sheet may not exist yet
+    const text=await resp.text();
+    const lines=text.split(/\r?\n/).filter(l=>l.trim());
+    if(lines.length<2) return;
+    const headers=parseCSVLine(lines[0]).map(h=>h.toLowerCase().trim());
+    const idIdx=headers.indexOf('id');
+    const xIdx=headers.indexOf('x');
+    const yIdx=headers.indexOf('y');
+    if(idIdx===-1||xIdx===-1||yIdx===-1) return;
+    for(let i=1;i<lines.length;i++){
+      const cols=parseCSVLine(lines[i]);
+      if(!cols.some(c=>c)) continue;
+      const nodeId=cols[idIdx]?.trim();
+      const x=parseFloat(cols[xIdx]);
+      const y=parseFloat(cols[yIdx]);
+      const node=N[nodeId];
+      if(node&&!isNaN(x)&&!isNaN(y)){node.x=x;node.y=y;}
+    }
+    recomputeAll();
+  }catch(e){}
+}
+
+function publishLayout(){
+  // Generate CSV content for Layout sheet
+  const rows=[['id','x','y','label']];
+  NODES.forEach(n=>{rows.push([n.id,Math.round(n.x),Math.round(n.y),n.lbl.join(' ')]);} );
+  const csv=rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  
+  // Download as CSV — user uploads to Layout sheet in Google Sheets
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='RJ_Pipeline_Layout.csv';
+  a.click();
+  
+  // Show instructions
+  setTimeout(()=>alert(
+    'Layout CSV downloaded!\n\n'+
+    'To share this layout with everyone:\n'+
+    '1. Open your Google Sheet\n'+
+    '2. Click the + tab at the bottom → name it "Layout"\n'+
+    '3. File → Import → Upload → select RJ_Pipeline_Layout.csv\n'+
+    '4. Choose "Replace current sheet" → Import\n\n'+
+    'Everyone will see your layout next time they refresh the page!'
+  ),100);
+}
 
 document.fonts.ready.then(render);
-initBanner();
 </script>
 
 
