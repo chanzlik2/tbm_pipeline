@@ -151,7 +151,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f8f5f0;color:#1e293b;ov
   <div id="header">
     <div>
       <h1>Raymond James — TBM Datalink Pipeline</h1>
-      <p>Hover any line for quick summary · Click any line or node for details · Edit mode: drag nodes, line elbows, or endpoint dots · Sheet columns: A=ID, B=From, C=To, D=Name, E=FromCond, F=ToCond, G=Overview, H=Layman, I=Notes, J=Color</p>
+      <p>Hover any line for quick summary · Click any line or node for details · Edit mode: drag nodes, line elbows, or endpoint dots</p>
     </div>
     <div class="legend">
       <div class="leg"><div class="leg-line" style="background:#7c3aed"></div>→ Consumption</div>
@@ -174,9 +174,8 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f8f5f0;color:#1e293b;ov
   </div>
   <div id="sync-bar" class="loading">
     <span class="sync-dot loading" id="sync-dot"></span>
-    <span id="sync-text">Loading from Google Sheets...</span>
+    <span id="sync-text">Connecting to Google Sheets...</span>
     <button class="sync-refresh-btn" id="sync-btn" onclick="syncFromSheets()">↺ Sync now</button>
-    <button class="sync-refresh-btn" onclick="showNodeNames()" style="margin-left:4px" title="Show valid node names for Google Sheet">? Node names</button>
   </div>
   <div id="main">
     <div id="canvas-wrap"><canvas id="c" width="2275" height="2905" style="width: 1300px; height: 1660px; cursor: default;"></canvas></div>
@@ -200,7 +199,7 @@ const NODE_DEFAULTS=[
    desc:'The final destination of all IT costs. Consumption Source represents business unit consumers — departments and groups that ultimately "consume" IT services. Costs arrive from Business Services via 28 different usage-based allocation rules.'},
   {id:'biz_svcs',     lbl:['Business Services'],        x:460,y:210, w:200,h:40,col:'#92400e',badge:'10:28',
    desc:'Represents IT-enabled services delivered to the business. Costs flow in from Applications, Projects, End User Devices, Network Devices, and IT Resource Towers, then out to Consumption Source by usage metrics.'},
-  {id:'rj_tower_svc', lbl:['RJ Tower to Service','Mapping Transform'],x:690,y:202,w:155,h:46,col:'#7f1d1d',badge:'0:1',
+  {id:'rj_tower_svc', lbl:['RJ Tower→Service','Mapping Transform'],x:690,y:202,w:155,h:46,col:'#7f1d1d',badge:'0:1',
    desc:'A reference transform table mapping IT Resource Towers directly to Business Services. Used for tower costs with a defined service mapping that bypass the application layer entirely.'},
   {id:'applications', lbl:['Applications'],             x:460,y:340, w:170,h:40,col:'#1e3a8a',badge:'1:1',
    desc:'Holds fully-loaded cost assigned to each application. Costs arrive from the Application Cost Driver Stage and flow out to Business Services where a service offering linkage exists.'},
@@ -234,7 +233,7 @@ const NODE_DEFAULTS=[
    desc:'Holds network device costs. Routes to Business Services (Data Network), Data Centers (DC locations), End User Devices, and Storage Devices.'},
   {id:'projects',     lbl:['Projects'],                 x:1030,y:630,w:130,h:40,col:'#14532d',badge:'4:10',
    desc:'Holds IT project spend. Routes to Applications, Business Services, Tickets, Databases, DevOps/App Services (ACDS), Physical Servers, Data Centers, and End User Devices.'},
-  {id:'rj_dc_rack',   lbl:['RJ Data Center Rack','Usage Consolidation'],x:960,y:820,w:130,h:46,col:'#1e3050',badge:'1:3',
+  {id:'rj_dc_rack',   lbl:['RJ DC Rack','Usage Consol.'],x:960,y:820,w:130,h:46,col:'#1e3050',badge:'1:3',
    desc:'RJ Data Center Rack Usage Consolidation. Receives from Data Centers weighted by rack count. Routes to Physical Server (compute), Servers (network/security), and Storage.'},
   {id:'itrt',         lbl:['IT Resource Towers'],       x:110,y:980, w:980,h:50,col:'#065f46',badge:'11:15',
    desc:'The central hub of the RJ TBM cost model. All upstream costs flow in through 15 inbound rules and redistribute through 15 outbound rules to Applications, Business Services, and Projects layers.'},
@@ -263,10 +262,185 @@ const NODE_DEFAULTS=[
 // ═══════════════════════════════════════════
 // ALLOCATIONS
 // ═══════════════════════════════════════════
-// ALLOCS is populated entirely from Google Sheets on page load
-// Do not add hardcoded allocations here — edit the Google Sheet instead
-const ALLOCS=[];
+const ALLOCS=[
+  {id:'cs_labor',from:'cost_source',to:'labor',name:'Labor',fromCond:"Cost Pool = 'Internal Labor' AND Vendor Name Is Null",toCond:"Labor Metadata 1 = 'Actual'",overview:'Routes internal labor costs from Cost Source to the Labor table, weighted by headcount, matched on Cost Center and Cost Pool.',layman:'Internal employee labor costs are pushed into the Labor pool and spread based on how many headcount each cost center/pool has — so bigger teams absorb more cost.'},
+  {id:'cs_cons_labor',from:'cost_source',to:'vendors',name:'Consulting Labor',fromCond:"Cost Pool = 'External Labor'",toCond:"Source Table = 'Cost Source Vendor Transform'",overview:'Routes external labor costs from Cost Source to Vendors, distributed evenly.',layman:'Contractor and consulting spend is sent to the Vendor layer and split evenly across matching vendor/project combinations.'},
+  {id:'cs_vendors_nl',from:'cost_source',to:'vendors',name:'Vendors (non-labor)',fromCond:"Is Depr = 'No' AND Is Vendor = 'Yes' AND Is Labor = 'No' AND Cost Pool != 'Market Data'",toCond:"Source Table = 'Cost Source Vendor Transform'",overview:'Routes non-labor, non-depreciation vendor costs to the Vendors table, weighted by Weighting metric.',layman:'Non-labor vendor spend flows to the Vendor layer and is distributed proportionally based on pre-defined weighting.'},
+  {id:'cs_fa_amort',from:'cost_source',to:'fixed_asset_ledger',name:'FA - Amort',fromCond:"Is Depr = 'Yes' AND Account = '705800'",toCond:"Profile ID In ('SOFTWARE','PCSOFTWARE')",overview:'Routes software amortization costs (account 705800) to the Fixed Asset Ledger, weighted by Depreciation Amount.',layman:'Software amortization charges are matched to their fixed asset records and spread by depreciation amount.'},
+  {id:'cs_fa_no_amort',from:'cost_source',to:'fixed_asset_ledger',name:'FA - no Amort',fromCond:"Is Depr = 'Yes' AND Account != '705800'",toCond:"Profile ID Not In ('SOFTWARE','PCSOFTWARE')",overview:'Routes non-software depreciation costs to the Fixed Asset Ledger, weighted by Depreciation Amount.',layman:'Hardware and non-software depreciation is matched to fixed asset records and distributed by depreciation amount.'},
+  {id:'cs_market_data',from:'cost_source',to:'vendors',name:'Market Data',fromCond:"Cost Pool = 'Market Data'",toCond:'None',overview:'Routes Market Data costs to the Vendors table, distributed evenly.',layman:'Market data subscription costs are passed to vendors and split evenly across matching service categories.'},
+  {id:'cs_overhead',from:'cost_source',to:'other_cost_pools',name:'Overhead (remainder)',fromCond:'Remainder only — costs not consumed by prior rules',toCond:'None',overview:'Sends remaining Cost Source amounts to Other Cost Pools, weighted by % Allocated.',layman:'Anything left over after all other rules run is treated as overhead and redistributed based on pre-set allocation percentages.'},
+  {id:'cs_projects',from:'cost_source',to:'projects',name:'Projects (remainder)',fromCond:"Is Project = 'Yes' AND Vendor Name Is Null AND Is Depr = 'No' AND Is Labor = 'No'",toCond:"Spend Metric = 'Hardware/Software'",overview:'Routes project-tagged, non-labor, non-vendor, non-depreciation costs to Projects.',layman:"Project spend on hardware/software that isn\'t labor or vendor-linked gets pushed to projects and distributed by weighting."},
+  {id:'fal_itrt',from:'fixed_asset_ledger',to:'itrt',name:'Assets to Towers',fromCond:'None',toCond:"Source Table = 'RJ Fixed Assets Resource Towers'",overview:'Allocates all Fixed Asset Ledger costs to IT Resource Towers, weighted by Depreciation Amount.',layman:"Fixed asset depreciation is pushed into the IT tower layer and spread based on each asset's depreciation amount."},
+  {id:'labor_tt_int',from:'labor',to:'time_tracking',name:'Time Tracking - Internal Labor',fromCond:"Employee Type = 'Internal Labor' AND Check for TT Is NOT Null",toCond:"Employee Type = 'Internal Labor'",overview:'Routes internal labor costs with TT data to Time Tracking, weighted by Actual Hours.',layman:'For employees who log their time, labor costs are allocated based on actual hours worked.'},
+  {id:'labor_tt_ext',from:'labor',to:'time_tracking',name:'Time Tracking - External Labor',fromCond:"Cost Pool = 'External Labor'",toCond:"Employee Type = 'External Labor'",overview:'Routes external labor costs to Time Tracking, weighted by Actual Hours.',layman:'Contractor time charges are allocated based on actual hours logged.'},
+  {id:'labor_ext_no_tt',from:'labor',to:'itrt',name:'External Labor Vendors (No TT)',fromCond:"Labor ID Is Null AND Vendor Name Is NOT Null AND Check for TT 2 Is Null AND Cost Pool = 'External Labor'",toCond:"Spend Metric = 'Labor' AND OCP Flag Is Null",overview:'Routes external labor with no time tracking directly to IT Resource Towers, distributed evenly.',layman:"When contractors don\'t have time tracking data, their costs go straight to the IT tower layer and are spread evenly."},
+  {id:'labor_exec',from:'labor',to:'itrt',name:'Executive Labor',fromCond:"Cost Pool = 'Internal Labor' AND TT Exec Is Not Null AND Check for TT Is Null",toCond:"Source Table = 'Cost Center to Tower Mapping' AND Spend Metric = 'Labor'",overview:'Routes executive labor to IT Resource Towers, weighted by % Weighting.',layman:'Executive labor costs bypass standard time tracking and go to towers using pre-defined percentage weightings.'},
+  {id:'labor_fallout',from:'labor',to:'time_tracking',name:'Labor Fallout',fromCond:'Remainder — Labor ID Is NOT Null AND TT Exec Is Null',toCond:'None',overview:'Sends remaining labor costs (not exec, has Labor ID) to Time Tracking, distributed evenly.',layman:"Any internal labor costs that didn\'t match other rules are caught here and evenly distributed into time tracking."},
+  {id:'tt_itrt',from:'time_tracking',to:'itrt',name:'Time Tracking to Towers',fromCond:'None',toCond:"Source Table = 'Time Tracking Transform'",overview:'Routes all Time Tracking costs to IT Resource Towers, distributed evenly.',layman:'Time-tracked labor costs are pushed into the IT tower layer — connecting actual time worked to the towers where the work happened.'},
+  {id:'vend_ext_labor',from:'vendors',to:'labor',name:'External Labor (Vendors)',fromCond:"Cost Pool = 'External Labor' AND Data Source != 'ITPF Budget'",toCond:"Source Table = 'Cost Source Vendor Transform'",overview:'Routes external labor vendor costs back to the Labor table, distributed evenly.',layman:'External labor from the vendor layer is routed back into the labor pipeline so it flows through time tracking and tower allocation.'},
+  {id:'vend_apps_itrt',from:'vendors',to:'itrt',name:'Vendor Apps to ITRT',fromCond:"Vendor Name Is Not Null AND Application Name Is Not Null AND Cost Pool != 'External Labor' AND Is CSP = 'No'",toCond:"Source Table = 'ITRT Vendor Apps'",overview:'Routes vendor costs linked to specific applications to IT Resource Towers, weighted by Weighting.',layman:'Vendor costs tied to a specific application are pushed to the tower layer and distributed by weighting.'},
+  {id:'vend_itrt',from:'vendors',to:'itrt',name:'Vendor to ITRT',fromCond:"Cost Pool != 'External Labor' AND Application Name Is Null AND Is CSP = 'No' AND Cost Pool != 'MARKET DATA'",toCond:"Source Table = 'ITRT Vendor Apps' AND Application ID Is Null",overview:'Routes vendor costs with no application linkage to IT Resource Towers, weighted by Weighting.',layman:"Vendor costs that can\'t be tied to a specific app are still pushed to the tower layer by weighting."},
+  {id:'vend_mktdata',from:'vendors',to:'itrt',name:'Market Data (Vendors→ITRT)',fromCond:"Cost Pool = 'MARKET DATA'",toCond:"Cost Pool = 'MARKET DATA' AND OCP Flag Is Null",overview:'Routes Market Data vendor costs to IT Resource Towers, distributed evenly.',layman:'Market data costs pass through the vendor layer and spread evenly across matching IT towers.'},
+  {id:'vend_csp',from:'vendors',to:'cloud_sp',name:'Cloud Service Provider',fromCond:"Is CSP = 'Yes'",toCond:'None',overview:'Routes cloud service provider vendor costs to Cloud Service Provider, weighted by Cost.',layman:'All cloud vendor spend (AWS, Google, etc.) is separated out and sent to a dedicated cloud layer, weighted by actual cost.'},
+  {id:'ocp_itrt',from:'other_cost_pools',to:'itrt',name:'OCP to IT Resource Towers',fromCond:'None',toCond:"OCP Flag = 'Yes' AND Spend Type = 'RTB'",overview:'Routes Other Cost Pools amounts to IT Resource Towers (RTB spend only), distributed evenly.',layman:'Overhead pool costs flagged for tower allocation are spread evenly into the appropriate IT towers.'},
+  {id:'ocp_dc_itrt',from:'other_cost_pools',to:'itrt',name:'Data Center OCP to Towers',fromCond:'None',toCond:"OCP Flag = 'Yes' AND Spend Type = 'RTB'",overview:'Routes Data Center-related Other Cost Pools to IT Resource Towers, distributed evenly.',layman:'Data center overhead costs are redistributed evenly into the appropriate IT resource towers.'},
+  {id:'csp_aws',from:'cloud_sp',to:'itrt',name:'CSP — AWS to Towers',fromCond:"Vendor_CSP Key = 'Vendor_CSP - AMAZON WEB SERVICES'",toCond:"Source Table = 'Cloud Service Provider Towers Transform'",overview:'Routes AWS cloud costs to IT Resource Towers, distributed evenly.',layman:'AWS cloud spend is mapped to the specific IT towers it supports and spread evenly.'},
+  {id:'csp_google',from:'cloud_sp',to:'itrt',name:'CSP — Google Cloud to Towers',fromCond:"Vendor_CSP Key Contains 'GOOGLE LLC'",toCond:'None',overview:'Routes Google Cloud costs to IT Resource Towers, distributed evenly.',layman:'Google Cloud spend is mapped to the IT towers it supports and spread evenly.'},
+  {id:'itrt_mktdata_svc',from:'itrt',to:'biz_svcs',name:'Market Data (ITRT)',fromCond:"Cost Pool = 'Market Data'",toCond:'None',overview:'Routes Market Data IT Resource Tower costs directly to Business Services.',layman:'Market data costs in the tower layer flow directly to the business services that use them.'},
+  {id:'itrt_ocp_alloc',from:'itrt',to:'biz_svcs',name:'OCP Allocation (ITRT)',fromCond:'None',toCond:"OCP Flag = 'Yes'",overview:'Routes OCP-flagged IT Resource Tower costs to Business Services.',layman:'Overhead cost pool allocations at the tower layer are passed through to business services.'},
+  {id:'itrt_itmnt_svc',from:'itrt',to:'biz_svcs',name:'ITMNT to Services',fromCond:'None',toCond:"Source Table = 'ITMNT Services'",overview:'Routes ITMNT-linked IT Resource Tower costs to Business Services.',layman:'IT maintenance costs at the tower level that are linked to services flow directly to business services.'},
+  {id:'nd_biz',from:'network_devices',to:'biz_svcs',name:'Network Devices to Biz Svcs',fromCond:"Location != 'Denver' AND Location != 'St Pete' AND Location != 'Southfield'",toCond:"Service Offering = 'DATA NETWORK' AND Spend Metric = 'Hosting'",overview:'Routes network device costs from non-DC locations to Business Services (Data Network, Hosting).',layman:'Network devices outside the main data centers are allocated to the Data Network business service as hosting cost.'},
+  {id:'nd_dc',from:'network_devices',to:'data_centers',name:'Network Devices to Data Centers',fromCond:"Location In ('Denver','Southfield','St Pete')",toCond:'None',overview:'Routes network device costs from DC locations to Data Centers.',layman:'Network devices physically in data centers are allocated back to those data center records.'},
+  {id:'nd_eud',from:'network_devices',to:'eud',name:'Network Devices to EUD',fromCond:'None',toCond:'None',overview:'Routes network device costs to End User Devices, distributed evenly.',layman:'Network costs associated with end user connectivity are passed through to the end user device layer.'},
+  {id:'nd_storage',from:'network_devices',to:'storage_devices',name:'Network Devices to Storage',fromCond:'None',toCond:'None',overview:'Routes network device costs to Storage Devices, distributed evenly.',layman:'Network costs tied to storage infrastructure are passed through to storage devices.'},
+  {id:'db_sql',from:'databases',to:'servers',name:'Servers - SQL',fromCond:"Service = 'DATABASE - SQL'",toCond:'None',overview:'Routes SQL database costs to Servers, weighted by Estimated Cost.',layman:'SQL database costs are pushed to their associated servers and distributed by estimated cost.'},
+  {id:'db_oracle',from:'databases',to:'servers',name:'Servers - Oracle',fromCond:"Service = 'DATABASE - ORACLE'",toCond:'None',overview:'Routes Oracle database costs to Servers, weighted by Estimated Cost.',layman:'Oracle database costs are distributed to servers based on estimated cost.'},
+  {id:'db_enterprise',from:'databases',to:'servers',name:'Servers - Enterprise DB',fromCond:"Service = 'DATABASE - ENTERPRISE'",toCond:'None',overview:'Routes Enterprise database costs to Servers, distributed evenly.',layman:'Enterprise database costs are spread evenly across the servers associated with that service offering.'},
+  {id:'db_mongo',from:'databases',to:'servers',name:'Servers - Mongo',fromCond:"Service = 'DATABASE - MONGO'",toCond:'None',overview:'Routes MongoDB costs to Servers, weighted by Estimated Cost.',layman:'MongoDB costs are pushed to servers by estimated cost and environment.'},
+  {id:'db_exadata',from:'databases',to:'servers',name:'Servers - Exadata',fromCond:"Service = 'ORACLE EXADATA'",toCond:'None',overview:'Routes Oracle Exadata database costs to Servers.',layman:'Oracle Exadata costs are routed to the servers they run on.'},
+  {id:'db_nonstop',from:'databases',to:'servers',name:'Servers - HP NonStop (DB)',fromCond:"Service = 'HP NONSTOP'",toCond:"Database Type = 'HP NONSTOP'",overview:'Routes HP NonStop database costs to Servers, weighted by HP NonStop Weighting.',layman:'HP NonStop database costs are allocated to HP NonStop servers using specialized platform weighting.'},
+  {id:'ps_hyp',from:'phys_server',to:'hypervisor',name:'Hypervisor (Phys→Hyp)',fromCond:"virtual = 'TRUE' AND Is Host = 'TRUE'",toCond:'None',overview:'Routes physical server costs for virtualization hosts to Hypervisor.',layman:'Physical servers that are hypervisor hosts are separated and sent to the hypervisor layer.'},
+  {id:'ps_srv',from:'phys_server',to:'servers',name:'Physical Servers',fromCond:"Is Host? = 'FALSE' AND Database Type != 'HP NONSTOP' AND Database Type != 'Database - SQL'",toCond:'None',overview:'Routes non-host physical server costs to Servers.',layman:"Physical servers that aren\'t hypervisor hosts or specialized database platforms are passed directly to the server layer."},
+  {id:'ps_nonstop',from:'phys_server',to:'servers',name:'Servers: HP NonStop (Phys)',fromCond:"Database Type = 'HP NONSTOP'",toCond:'None',overview:'Routes HP NonStop physical server costs to Servers.',layman:'HP NonStop physical server costs flow to the server layer using specialized weighting.'},
+  {id:'stor_srv',from:'storage',to:'servers',name:'Location Based Allocation',fromCond:'None',toCond:'None',overview:'Routes all Storage costs to Servers, weighted by Estimated Cost, matched on Location.',layman:'Storage costs are pushed to the servers that use them, distributed by estimated cost and matched by location.'},
+  {id:'sd_stor',from:'storage_devices',to:'storage',name:'Storage Devices to Storage',fromCond:'None',toCond:'None',overview:'Routes Storage Device costs to the Storage table, distributed evenly.',layman:'Storage device costs are passed through to the storage layer using a pre-built key match.'},
+  {id:'cpds_cs',from:'cpds',to:'cloud_svcs',name:'Cloud Provider to Cloud Svcs',fromCond:'None',toCond:'None',overview:'Routes Cloud Provider Cost Driver Stage costs to Cloud Services.',layman:'Cloud cost driver records are passed directly to the Cloud Services layer — a clean passthrough.'},
+  {id:'cs_acds_c',from:'cloud_svcs',to:'acds',name:'Cloud Svcs to App Hosting',fromCond:'None',toCond:"Spend Metric = 'Hosting'",overview:'Routes Cloud Services costs to Application Cost Driver Stage (Hosting).',layman:'Cloud service costs are pushed to the application cost driver layer and spread evenly across consuming applications.'},
+  {id:'hyp_vms_h',from:'hypervisor',to:'servers',name:'VMs with Host',fromCond:'None',toCond:"Is Virtual Machine = 'TRUE'",overview:'Routes Hypervisor costs to virtual machine Servers, weighted by Estimated Cost.',layman:"Hypervisor costs are pushed down to the VMs running on each host and distributed by their estimated cost."},
+  {id:'hyp_vms_nh',from:'hypervisor',to:'servers',name:'VMs without Host',fromCond:"Is Host? = 'FALSE'",toCond:"Is Virtual Machine = 'TRUE'",overview:'Routes Hypervisor costs for non-host hypervisors to virtual machine Servers, weighted by CPU Cores.',layman:'When a hypervisor has no host designation, costs are still pushed to VMs and distributed by CPU core count.'},
+  {id:'hyp_fallout',from:'hypervisor',to:'acds',name:'Hosts Fallout',fromCond:'Remainder (after other Hypervisor rules run)',toCond:"Application Name = 'FALLOUT - ESX HOST WITH NO VMS'",overview:"Routes remaining hypervisor host costs that couldn\'t match any VMs to a fallout application record.",layman:'ESX hosts with no matching VMs are caught in a fallout bucket — flagging orphaned host costs for review.'},
+  {id:'tick_apps',from:'tickets',to:'acds',name:'Tickets to Applications',fromCond:"Application ID Is NOT Null AND Company In ('RJ United States','RJ Global Shared')",toCond:"Spend Metric = 'Tickets' AND Is HPNonStop != 'Yes'",overview:'Routes RJ ticket costs with an application link to ACDS (Tickets spend metric).',layman:'Support ticket costs tied to an application are pushed into the app cost driver layer.'},
+  {id:'tick_srv',from:'tickets',to:'servers',name:'Tickets to Servers',fromCond:'Application ID Is Null AND Server ID Is NOT Null',toCond:'None',overview:'Routes ticket costs with no application but a linked server to Servers.',layman:'Tickets tied to a server but not a specific application are pushed directly to the server layer.'},
+  {id:'srv_app',from:'servers',to:'acds',name:'Application (Servers)',fromCond:"Is HP NonStop != 'Yes' AND Is Exadata DB? != 'Yes'",toCond:"Spend Metric = 'Hosting' AND Is HPNonStop != 'Yes'",overview:'Routes standard server costs to ACDS (Hosting), distributed evenly.',layman:'Standard server hosting costs are pushed to the app cost driver layer and spread evenly across the applications running on each server.'},
+  {id:'srv_nonstop',from:'servers',to:'acds',name:'HP NonStop Apps',fromCond:"Is HP NonStop = 'Yes'",toCond:"Is HPNonStop = 'Yes'",overview:'Routes HP NonStop server costs to ACDS, weighted by New % Allocation.',layman:'HP NonStop server costs are allocated across HP NonStop applications using a specialized percentage allocation.'},
+  {id:'srv_exadata',from:'servers',to:'acds',name:'Exadata Applications',fromCond:"Is Exadata DB? = 'Yes'",toCond:"Is Exadata = 'Yes'",overview:'Routes Oracle Exadata server costs to ACDS, weighted by Weighted Factor.',layman:'Exadata server costs are distributed across Exadata-hosted applications using a specialized weighted factor.'},
+  {id:'srv_db_ent',from:'servers',to:'biz_svcs',name:'DB Enterprise to Services',fromCond:"Service Offering = 'DATABASE - ENTERPRISE'",toCond:"Spend Metric = 'Hosting'",overview:'Routes Enterprise Database server costs directly to Business Services (Hosting).',layman:'Enterprise database server costs bypass the application layer and go straight to business services.'},
+  {id:'srv_fallout',from:'servers',to:'acds',name:'Server to App (remainder)',fromCond:"Remainder — Service Offering Is Null AND Is HP NonStop != 'Yes'",toCond:"Application Name = 'FALLOUT - SERVER WITH NO APPLICATION'",overview:'Routes remaining server costs with no service offering to a fallout application record.',layman:"Any server costs that couldn\'t match an application are caught in a fallout bucket."},
+  {id:'proj_apps',from:'projects',to:'acds',name:'Projects to Applications',fromCond:"IT Sub-Tower != 'IT Help Desk' AND Application ID Is NOT Null",toCond:"Is HPNonStop != 'Yes'",overview:'Routes project costs with application linkage to ACDS, weighted by Percent Weighting.',layman:"Project spend tied to a specific app flows into the application cost driver layer, weighted by each app's share."},
+  {id:'proj_biz',from:'projects',to:'biz_svcs',name:'Projects to Biz Services',fromCond:"Remainder AND Service Name Is NOT Null AND IT Resource Tower != 'Compute'",toCond:'None',overview:'Routes remaining project costs with a service name to Business Services.',layman:"Project costs that couldn\'t be tied to an application but have a service name go straight to business services."},
+  {id:'proj_tick',from:'projects',to:'tickets',name:'Projects to Tickets',fromCond:"Application ID Is Null AND Service Name In (SERVICE DESK variants)",toCond:'None',overview:'Routes service desk project costs to Tickets, weighted by Priority Weight.',layman:'Service desk project costs without an app link are sent to the ticketing layer and distributed by ticket priority weight.'},
+  {id:'proj_db_excl',from:'projects',to:'databases',name:'Database: Exclude NonStop',fromCond:"IT Sub-Tower = 'Database' AND Application ID Is Null AND Service Name != 'HP NONSTOP'",toCond:"Vendor != 'HP NONSTOP'",overview:'Routes database sub-tower project costs (excluding HP NonStop) to Databases.',layman:"Database project costs that aren\'t HP NonStop and lack an app link are pushed to the database layer."},
+  {id:'proj_devops',from:'projects',to:'acds',name:'DevOps',fromCond:"Department = '2ML00' AND Application ID Is Null",toCond:"Support Group = 'DEVOPS'",overview:'Routes DevOps dept project costs to ACDS, weighted by Application Hosting Weighting.',layman:'DevOps project costs with no specific app link are allocated across applications based on hosting weighting.'},
+  {id:'proj_app_svcs',from:'projects',to:'acds',name:'Application Services',fromCond:"Department = '2TJ00' AND Application ID Is Null",toCond:"Support Group = 'APPLICATION SERVICES'",overview:'Routes Application Services dept project costs to ACDS, distributed evenly.',layman:'Application Services project costs without a specific app are spread evenly across the application services group.'},
+  {id:'proj_phys',from:'projects',to:'phys_server',name:'Physical Servers (Projects)',fromCond:"IT Resource Tower Contains 'Compute' AND Department Not In ('12U00','2ML00')",toCond:'None',overview:'Routes Compute tower project costs to Physical Servers, weighted by CPU Cores.',layman:'Compute project costs are pushed to physical servers and spread based on CPU core count.'},
+  {id:'proj_db_ns',from:'projects',to:'databases',name:'Database: HP NONSTOP',fromCond:"IT Sub-Tower = 'Servers' AND Department = '12U00'",toCond:"Vendor = 'HP NONSTOP'",overview:'Routes HP NonStop server project costs to Databases.',layman:'HP NonStop server costs are isolated and sent directly to the HP NonStop database record.'},
+  {id:'proj_dc',from:'projects',to:'data_centers',name:'Projects to Data Center',fromCond:"IT Resource Tower = 'Data Center' AND Application ID Is Null",toCond:'None',overview:'Routes Data Center tower project costs to Data Centers, weighted by Data Center RU Usage.',layman:'Data center project costs are allocated to data center records based on rack unit usage.'},
+  {id:'proj_eud',from:'projects',to:'eud',name:'Projects to EUD',fromCond:"IT Sub-Tower = 'IT Help Desk' AND Application ID Is NOT Null",toCond:'None',overview:'Routes IT Help Desk project costs with app linkage to End User Devices.',layman:'Help desk project costs tied to applications are pushed to the end user device layer and spread evenly by department.'},
+  {id:'dc_rack',from:'data_centers',to:'rj_dc_rack',name:'Data Centers to Rack Consol.',fromCond:'None',toCond:'None',overview:'Routes Data Center costs to RJ DC Rack Usage Consolidation, weighted by # of Racks.',layman:'Data center costs are distributed across rack usage records based on how many racks each location uses.'},
+  {id:'rack_phys',from:'rj_dc_rack',to:'phys_server',name:'Data Center to Servers (Compute)',fromCond:"Name = 'DistComp Servers'",toCond:'None',overview:'Routes DC rack costs for compute servers to Physical Servers.',layman:'Data center costs for compute server racks are pushed to physical servers by location.'},
+  {id:'rack_srv_net',from:'rj_dc_rack',to:'servers',name:'Datacenter to Servers Network',fromCond:"Name = 'Network and Security'",toCond:'None',overview:'Routes DC rack costs for network/security to Servers, weighted by CPU Cores.',layman:'Network and security rack costs are distributed to servers based on CPU core count.'},
+  {id:'rack_stor',from:'rj_dc_rack',to:'storage',name:'Data Center to Storage',fromCond:"Name = 'DistComp Storage'",toCond:'None',overview:'Routes DC rack costs for storage to the Storage table.',layman:'Data center storage rack costs are passed to storage records by location.'},
+  {id:'eud_biz',from:'eud',to:'biz_svcs',name:'EUD to Biz Svcs (HW/SW)',fromCond:'None',toCond:"Spend Metric = 'Hardware/Software'",overview:'Routes End User Device costs to Business Services (Hardware/Software).',layman:'End user device costs are pushed to the business service layer and spread evenly by device type.'},
+  {id:'acds_apps',from:'acds',to:'applications',name:'App Cost Driver to Apps',fromCond:'None',toCond:'None',overview:'Routes all ACDS costs to Applications, weighted by Percent Weighting.',layman:'All costs accumulated in the application cost driver layer are pushed to final application records — assigning a fully-loaded IT cost to each application.'},
+  {id:'apps_biz',from:'applications',to:'biz_svcs',name:'Applications to Biz Services',fromCond:'Service Offering Is NOT Null',toCond:'None',overview:'Routes application costs with service offering linkage to Business Services.',layman:'Application costs tied to a business service are passed through to the service layer — connecting fully-loaded application costs to the business services they enable.'},
+  {id:'rjtow_biz',from:'rj_tower_svc',to:'biz_svcs',name:'Towers to Services',fromCond:'None',toCond:'None',overview:'Routes all RJ Tower to Service Mapping Transform costs to Business Services.',layman:'Tower costs with a direct service mapping are passed through to business services using the service name match.'},
 
+  // ── NEW ITRT ALLOCATIONS ─────────────────────────────────────
+  {id:'itrt_towers_proj_labor',from:'itrt',to:'projects',name:'Towers to Projects (Labor)',
+   fromCond:"Spend Metric = 'Labor' AND Project ID Is NOT Null AND Source Table = 'Time Tracking Transform'",
+   toCond:"Source Table = 'Time Tracking Projects'",
+   overview:'Routes IT Resource Tower labor costs that are project-linked and originated from time tracking to the Projects table, weighted by Weighting, matched on Project ID and Cost Center to Department.',
+   layman:'Time-tracked labor costs at the tower level that belong to specific projects are routed back into the Projects layer — ensuring project labor spend is properly attributed to the right project records.'},
+
+  {id:'itrt_itmnt_sub_app',from:'itrt',to:'acds',name:'ITMNT or Subscription App',
+   fromCond:"Source Table = 'ITRT Vendor Apps' AND Is Consulting Related = 'No' AND Application ID Is NOT Null",
+   toCond:'None',
+   overview:'Routes IT Resource Tower costs from vendor app records (non-consulting, app-linked) to the Application Cost Driver Stage, distributed evenly, matched on Application ID, Spend Metric, and Spend Type.',
+   layman:'IT maintenance and subscription costs tied to a specific application go directly into the app cost driver stage — keeping app-specific vendor spend with the right applications.'},
+
+  {id:'itrt_proj_remaining',from:'itrt',to:'projects',name:'Projects Remaining',
+   fromCond:"Remainder AND Project ID Is NOT Null AND IT Resource Sub-Tower Name != 'Online Storage' AND Is Amort != 'Yes' AND Is No Consulting Related & Blank App ID != 'Yes'",
+   toCond:"Source Table != 'RJ Fixed Assets Resource Towers'",
+   overview:'Routes remaining IT Resource Tower project-linked costs (excluding Online Storage, amortized, and no-consulting/blank-app records) to Projects, weighted by Weighting, matched on Project ID and Spend Metric.',
+   layman:'Any tower costs linked to a project that weren\'t consumed by other rules are caught here and pushed to projects — a safety net ensuring project-tagged spend lands in the right place.'},
+
+  {id:'itrt_amort_fa',from:'itrt',to:'fa_amort_obj',name:'Amortized Fixed Assets',
+   fromCond:"Is Amort = 'Yes' AND Source Table = 'RJ Fixed Assets Resource Towers'",
+   toCond:'None',
+   overview:'Routes IT Resource Tower costs flagged as amortized fixed assets to the Fixed Asset Amortization table, distributed evenly, matched on Is Amort flag.',
+   layman:'Amortized asset costs at the tower level are separated out and routed to the Fixed Asset Amortization object — keeping depreciation/amortization flows clearly isolated from other tower spend.'},
+
+  {id:'itrt_direct_svc_new',from:'itrt',to:'biz_svcs',name:'Direct to Services',
+   fromCond:"Cost Pool Contains 'Labor' OR (Source Table Contains 'Asset' AND Service Name In ('COMPUTER','WORKSPACE SERVICES')) OR (IT Resource Sub-Tower Name = 'Enterprise Data Center' AND Source Table Does NOT Contain 'OCP') AND Project ID Is NOT Null AND Application ID Is Null AND Is Amort != 'Yes'",
+   toCond:"Spend Type = 'RTB'",
+   overview:'Routes IT Resource Tower costs meeting labor, asset, or data center criteria directly to Business Services (RTB spend type), distributed evenly, matched on Service Name to Service Offering and Spend Metric.',
+   layman:'Certain tower costs — particularly labor, workspace, and data center costs — have a clear direct service mapping and skip the application layer entirely, flowing straight to business services.'},
+
+  {id:'itrt_towers_proj_fa',from:'itrt',to:'projects',name:'Towers to Project (Fixed Assets)',
+   fromCond:"Source Table = 'RJ Fixed Assets Resource Towers' AND Project ID Is NOT Null AND Is Amort != 'Yes'",
+   toCond:"Source Table = 'RJ Fixed Assets Resource Towers'",
+   overview:'Routes IT Resource Tower non-amortized fixed asset costs (project-linked) to the Projects table, distributed evenly, matched on Project ID.',
+   layman:'Non-amortized fixed asset costs at the tower level that are linked to a project are routed back into the Projects layer — keeping capital project asset spend properly attributed.'},
+
+  {id:'itrt_db_service',from:'itrt',to:'databases',name:'Database: Service',
+   fromCond:"Service Name Contains 'Database' OR Service Name Contains 'Oracle' AND Service Name Is NOT Null AND IT Resource Tower Name != 'Storage' AND Project ID Is Null AND Is Amort != 'Yes' AND IT Resource Sub-Tower Name != 'Database'",
+   toCond:'None',
+   overview:'Routes IT Resource Tower database/Oracle service costs (excluding Storage tower, projects, amortized, and Database sub-tower) to Databases, weighted by Weighting, matched on Service Name to Service.',
+   layman:'Tower-level database and Oracle service costs that aren\'t tied to a project or the database sub-tower are pushed into the Databases layer and distributed by weighting.'},
+
+  {id:'itrt_cloud_cpds',from:'itrt',to:'cpds',name:'IT Resource Towers (Cloud)',
+   fromCond:"Is Cloud = 'Yes' AND Subscriptions Flag Is Null",
+   toCond:'None',
+   overview:'Routes IT Resource Tower cloud costs to the Cloud Provider Cost Driver Stage, weighted by Cost, matched on Vendor_CSP Key and ITRT_Cloud_Key.',
+   layman:'Cloud-tagged tower costs are separated out and routed to the Cloud Provider Cost Driver Stage, weighted by actual cost — setting them up for cloud-specific application allocation downstream.'},
+
+  {id:'itrt_network',from:'itrt',to:'network_devices',name:'Network (ITRT)',
+   fromCond:"IT Resource Sub-Tower Name In ('LAN/WAN','Transport') AND Project ID Is Null AND Application Name Is Null AND Cost Pool != 'MARKET DATA' AND OCP Flag Is Null",
+   toCond:'None',
+   overview:'Routes IT Resource Tower LAN/WAN and Transport sub-tower costs to Network Devices, weighted by Total Ports, with no data relationship matching.',
+   layman:'Network infrastructure tower costs are pushed to the network device layer and distributed based on port count — so devices with more ports absorb a proportionally larger share.'},
+
+  {id:'itrt_servers_phys',from:'itrt',to:'phys_server',name:'Servers (ITRT)',
+   fromCond:"Spend Metric != 'Labor' AND Cost Pool != 'MARKET DATA' AND Application ID Is Null AND Project ID Is Null AND IT Resource Sub-Tower Name = 'Servers'",
+   toCond:'None',
+   overview:'Routes IT Resource Tower server sub-tower costs (non-labor, non-market-data, no app or project) to Physical Servers, weighted by CPU Cores.',
+   layman:'Server tower costs are pushed to physical server records and distributed by CPU core count — so servers with more processing capacity absorb more of the infrastructure cost.'},
+
+  {id:'itrt_db_vendor',from:'itrt',to:'databases',name:'Database - Vendor',
+   fromCond:"IT Resource Sub-Tower Name = 'Database' AND Application ID Is NOT Null AND Service Name Contains 'DATABASE' AND Project ID Is Null",
+   toCond:'None',
+   overview:'Routes IT Resource Tower database sub-tower costs (app-linked, DATABASE service name, no project) to Databases, weighted by Weighting, matched on Vendor Name to Vendor.',
+   layman:'Database sub-tower costs tied to a specific application and vendor are pushed into the Databases layer by weighting — keeping vendor-specific database costs attributed to the right records.'},
+
+  {id:'itrt_storage',from:'itrt',to:'storage',name:'IT Resource Towers (Storage)',
+   fromCond:"IT Resource Tower Name = 'Storage' AND Application Name Is Null AND Project ID Is Null AND Cost Center != '12U00' AND Cost Pool != 'MARKET DATA' AND OCP Flag Is Null AND Cost Pool != 'Internal Labor'",
+   toCond:'None',
+   overview:'Routes IT Resource Tower storage costs (no app, no project, excluding specific cost center, market data, OCP, and internal labor) to Storage, weighted by ProvisionedSpaceGB.',
+   layman:'Storage tower costs are pushed to the storage layer and distributed based on provisioned capacity (GB) — so environments using more storage absorb a proportionally larger share.'},
+
+  {id:'bs_hc_all',from:'biz_svcs',to:'consumption',name:'Headcount - All Departments',fromCond:"UoM = 'Headcount' AND BU = 'ALL'",toCond:'None',overview:'Routes business service costs by headcount (all depts) to Consumption Source, weighted by Qty.',layman:'Services allocated by headcount are distributed proportionally based on employee count — bigger departments absorb more cost.'},
+  {id:'bs_100pct',from:'biz_svcs',to:'consumption',name:'100% to Department',fromCond:"UoM = '100% to Department'",toCond:'Dept for Allocation = Dept Name',overview:'Routes costs designated for a single department to Consumption Source.',layman:'When a service is 100% owned by one department, all its costs go directly to that department.'},
+  {id:'bs_fa_pcg',from:'biz_svcs',to:'consumption',name:'FA Count - PCG ALL',fromCond:"UoM = 'FA Count' AND BU = 'PCG'",toCond:"BU Name = 'PCG'",overview:'Routes PCG business service costs by financial advisor count to Consumption Source.',layman:'Services used by PCG advisors are allocated based on FA count — branches with more advisors absorb more cost.'},
+  {id:'bs_css',from:'biz_svcs',to:'consumption',name:'CSS Sys Data',fromCond:"UoM = 'CSS Sys Data'",toCond:'None',overview:'Routes costs by CSS system data to Consumption Source.',layman:'Services driven by CSS system usage are distributed based on actual system activity metrics.'},
+  {id:'bs_cob',from:'biz_svcs',to:'consumption',name:'COB Data - PCG',fromCond:"UoM = 'COB (Client Onboarding Data)'",toCond:"BU Name = 'PCG'",overview:'Routes PCG costs by client onboarding data to Consumption Source.',layman:'Onboarding-related service costs are allocated to PCG consumers based on client onboarding volume.'},
+  {id:'bs_client_access',from:'biz_svcs',to:'consumption',name:'Client Access Data - PCG',fromCond:"UoM = 'Client Access Data' AND BU = 'PCG'",toCond:"BU Name = 'PCG'",overview:'Routes PCG costs by client access data to Consumption Source.',layman:'Services tied to client access activity are allocated to PCG consumers based on actual client access counts.'},
+  {id:'bs_adv_search',from:'biz_svcs',to:'consumption',name:'Advanced Search Data',fromCond:"UoM = 'Advanced Search Data'",toCond:'None',overview:'Routes costs by advanced search usage to Consumption Source.',layman:'Advanced search service costs are distributed based on search usage volume.'},
+  {id:'bs_opp_es',from:'biz_svcs',to:'consumption',name:'Opp ES Data',fromCond:"UoM = 'Opportunities - ES data'",toCond:'None',overview:'Routes costs by Opportunities ES data to Consumption Source.',layman:'Opportunity management service costs are distributed based on ES opportunity data volume.'},
+  {id:'bs_trades_all',from:'biz_svcs',to:'consumption',name:'Trades - ALL',fromCond:"UoM = 'Trades' AND BU != 'PCG'",toCond:'None',overview:'Routes non-PCG costs by trade volume to Consumption Source.',layman:'Trading platform costs for non-PCG business units are distributed based on trade volume.'},
+  {id:'bs_ada',from:'biz_svcs',to:'consumption',name:'Ada Mgmt Data',fromCond:"UoM = 'Ada Management Data'",toCond:'None',overview:'Routes costs by Ada management data to Consumption Source.',layman:'Ada platform costs are distributed based on Ada management data volume.'},
+  {id:'bs_client_ctr',from:'biz_svcs',to:'consumption',name:'Client Ctr Data - PCG',fromCond:"UoM = 'Client Center Data' AND BU = 'PCG'",toCond:"BU Name = 'PCG'",overview:'Routes PCG costs by Client Center data to Consumption Source.',layman:'Client Center service costs are allocated to PCG consumers based on Client Center usage data.'},
+  {id:'bs_client_rep',from:'biz_svcs',to:'consumption',name:'Client Rep Data',fromCond:"UoM = 'Client Reporting Data'",toCond:'None',overview:'Routes costs by client reporting data to Consumption Source.',layman:'Client reporting platform costs are distributed based on reporting usage volume.'},
+  {id:'bs_apptio',from:'biz_svcs',to:'consumption',name:'Apptio Weighting',fromCond:"UoM = 'Apptio Weighting'",toCond:'None',overview:'Routes costs by Apptio weighting to Consumption Source.',layman:"Apptio platform costs are allocated using Apptio's own weighting methodology."},
+  {id:'bs_sec_mov',from:'biz_svcs',to:'consumption',name:'Security Movement Data',fromCond:"UoM = 'Security Movement Data'",toCond:'None',overview:'Routes costs by security movement data to Consumption Source.',layman:'Security movement service costs are distributed based on security transaction volume.'},
+  {id:'bs_notif',from:'biz_svcs',to:'consumption',name:'Notif ES Data',fromCond:"UoM = 'Notifications ES Data'",toCond:'None',overview:'Routes costs by notifications ES data to Consumption Source.',layman:'Notification service costs are distributed based on notification volume data.'},
+  {id:'bs_tableau',from:'biz_svcs',to:'consumption',name:'Tableau Licenses',fromCond:"UoM = 'Tableau Licenses'",toCond:'None',overview:'Routes costs by Tableau license count to Consumption Source.',layman:'Tableau costs are allocated based on license count.'},
+  {id:'bs_wealth',from:'biz_svcs',to:'consumption',name:'Wealth Management Data',fromCond:"UoM = 'Wealth Management Data'",toCond:'None',overview:'Routes costs by wealth management data to Consumption Source.',layman:'Wealth management platform costs are distributed based on activity volume.'},
+  {id:'bs_csp_data',from:'biz_svcs',to:'consumption',name:'CSP Data',fromCond:"UoM = 'CSP Data'",toCond:'None',overview:'Routes costs by CSP data to Consumption Source.',layman:'Cloud service costs are distributed based on CSP usage data.'},
+  {id:'bs_hc_scl',from:'biz_svcs',to:'consumption',name:'HC - Supv/Compl/Legal',fromCond:"UoM = 'Headcount' AND Dept = 'SUPERVISION, COMPLIANCE, LEGAL'",toCond:'Dept Name In (SUPERVISION, COMPLIANCE, LEGAL)',overview:'Routes costs to Supervision, Compliance, and Legal by headcount.',layman:'Services used by regulatory and compliance functions are allocated to those departments by headcount.'},
+  {id:'bs_esign',from:'biz_svcs',to:'consumption',name:'eSignature Data',fromCond:"UoM = 'eSignature Data'",toCond:'None',overview:'Routes costs by eSignature usage to Consumption Source.',layman:'eSignature platform costs are distributed based on signature usage volume.'},
+  {id:'bs_smart',from:'biz_svcs',to:'consumption',name:'Smartsheet Licenses',fromCond:"UoM = 'Smartsheet Licenses'",toCond:'None',overview:'Routes costs by Smartsheet license count to Consumption Source.',layman:'Smartsheet costs are allocated by license count.'},
+  {id:'bs_trades_pcg',from:'biz_svcs',to:'consumption',name:'Trades - PCG',fromCond:"UoM = 'Trades' AND BU = 'PCG'",toCond:"BU Name = 'PCG'",overview:'Routes PCG costs by trade volume to Consumption Source.',layman:'PCG trading platform costs are distributed to PCG consumers based on trade volume.'},
+  {id:'bs_hyperion',from:'biz_svcs',to:'consumption',name:'Hyperion Users',fromCond:"UoM = 'Hyperion Users'",toCond:'None',overview:'Routes costs by Hyperion user count to Consumption Source.',layman:'Hyperion financial planning platform costs are allocated based on user count.'},
+  {id:'bs_morning',from:'biz_svcs',to:'consumption',name:'MorningStar Licenses',fromCond:"UoM = 'Morningstar Licenses'",toCond:'None',overview:'Routes costs by Morningstar license count to Consumption Source.',layman:'Morningstar data subscription costs are allocated by license count.'},
+  {id:'bs_gpm',from:'biz_svcs',to:'consumption',name:'GPM Data',fromCond:"UoM = 'GPM Data'",toCond:'None',overview:'Routes costs by GPM data to Consumption Source.',layman:'GPM platform costs are distributed based on GPM data volume.'},
+  {id:'bs_hc_reg',from:'biz_svcs',to:'consumption',name:'HC - Regulatory ALL',fromCond:"UoM = 'Headcount' AND BU = 'Regulatory'",toCond:"BU Name = 'Regulatory'",overview:'Routes Regulatory BU costs by headcount to Consumption Source.',layman:'Services used by the Regulatory BU are allocated by headcount within that BU.'},
+  {id:'bs_money_mov',from:'biz_svcs',to:'consumption',name:'Money Movement Data',fromCond:"UoM = 'Money Movement Data'",toCond:'None',overview:'Routes costs by money movement data to Consumption Source.',layman:'Money movement platform costs are distributed based on transaction volume.'},
+  {id:'bs_50split',from:'biz_svcs',to:'consumption',name:'50% Split Institutional',fromCond:"UoM = '100% to Department' AND Dept = 'CM&A FIXED INCOME, CM&A GE'",toCond:'Dept Name In (CM&A FIXED INCOME, CM&A GE)',overview:'Routes costs for CM&A Fixed Income and CM&A GE, split evenly.',layman:'Services shared equally between the two CM&A institutional departments are split 50/50.'},
+
+  {id:'opex_fixed_cs',from:'opex_fixed',to:'cost_source',name:'OpEx Fixed to Cost Source',fromCond:"Cost Source Model Driver = 'OPEX - ACTUALS - FIXED'",toCond:'None',overview:'Routes fixed operating expenditure GL amounts into Cost Source. Uses the OpEx Fixed model driver formula to identify and load fixed-cost actuals.',layman:'Fixed operating costs (like rent, depreciation, and fixed salaries) are pulled from the GL and loaded into Cost Source so they can flow through the rest of the cost model.'},
+  {id:'opex_var_cs',from:'opex_var',to:'cost_source',name:'OpEx Variable to Cost Source',fromCond:"Cost Source Model Driver = 'OPEX - ACTUALS - VARIABLE'",toCond:'None',overview:'Routes variable operating expenditure GL amounts into Cost Source. Uses the OpEx Variable model driver formula to identify and load variable-cost actuals.',layman:'Variable operating costs (like contractor spend and usage-based charges) are pulled from the GL and loaded into Cost Source so they can flow through the rest of the cost model.'},
+];
 
 // ═══════════════════════════════════════════
 // LAYOUT — load saved or use defaults
@@ -312,7 +486,7 @@ function saveNote(id){
 const ROUTES_KEY='rj_pipeline_routes_v1';
 
 const ENDPOINTS_KEY='rj_pipeline_endpoints_v1';
-let endpointOverrides={"labor_exec": {"toSide": "bottom", "toFrac": 0.5598739495798319, "fromSide": "top", "fromFrac": 1}, "fal_itrt": {"toSide": "bottom", "toFrac": 0.27310924369747897}, "tt_itrt": {"toSide": "bottom", "toFrac": 0.45063025210084034, "fromSide": "top", "fromFrac": 0.514018691588785}, "vend_itrt": {"toSide": "bottom", "toFrac": 0.707983193277311}, "labor_ext_no_tt": {"toSide": "bottom", "toFrac": 0.3487394957983193}, "vend_mktdata": {"toSide": "bottom", "toFrac": 0.7510504201680672}, "vend_csp": {"fromSide": "right", "fromFrac": 0}, "ocp_dc_itrt": {"toSide": "bottom", "toFrac": 0.14915966386554622, "fromSide": "top", "fromFrac": 0.7931034482758621}, "vend_apps_itrt": {"toSide": "bottom", "toFrac": 0.6638655462184874}, "csp_google": {"toSide": "bottom", "toFrac": 0.8403361344537815, "fromSide": "top", "fromFrac": 0.21568627450980393}, "csp_aws": {"toSide": "bottom", "toFrac": 0.9023109243697479, "fromSide": "top", "fromFrac": 0.7843137254901961}, "labor_tt_int": {"toSide": "bottom", "toFrac": 0.11214953271028037}, "labor_fallout": {"toSide": "bottom", "toFrac": 0.8878504672897196}, "itrt_itmnt_svc": {"fromSide": "right", "fromFrac": 0, "toSide": "bottom", "toFrac": 0.9651162790697675}, "itrt_proj_labor": {"fromSide": "top", "fromFrac": 0.9411764705882353}, "itrt_proj_fa": {"fromSide": "top", "fromFrac": 0.9537815126050421}, "itrt_mktdata_svc": {"fromSide": "top", "fromFrac": 0.007352941176470588, "toSide": "bottom", "toFrac": 0.040697674418604654}, "itrt_amort_fa": {"toSide": "bottom", "toFrac": 0.5111111111111111, "fromSide": "top", "fromFrac": 0.10084033613445378}, "itrt_direct_svc_OLD": {"fromSide": "top", "fromFrac": 0, "toSide": "bottom", "toFrac": 0}, "itrt_db_service": {"fromSide": "top", "fromFrac": 0.3539915966386555, "toSide": "bottom", "toFrac": 0.0392156862745098}, "proj_app_svcs": {"fromSide": "top", "fromFrac": 0.9019607843137255, "toSide": "bottom", "toFrac": 0.8614457831325302}, "proj_biz": {"fromSide": "top", "fromFrac": 0.9607843137254902, "toSide": "bottom", "toFrac": 0.9069767441860465}, "srv_app": {"toSide": "bottom", "toFrac": 0.12650602409638553, "fromSide": "top", "fromFrac": 0.1893939393939394}, "proj_apps": {"toSide": "bottom", "toFrac": 0.7108433734939759, "fromSide": "top", "fromFrac": 0.7843137254901961}, "cs_acds_c": {"toSide": "bottom", "toFrac": 0.060240963855421686}, "itrt_db_vendor": {"toSide": "bottom", "toFrac": 0.30392156862745096, "fromSide": "top", "fromFrac": 0.38130252100840334}, "itrt_direct_svc_new": {"fromSide": "right", "fromFrac": 0.7402607310901989, "toSide": "right", "toFrac": 1}, "proj_db_ns": {"toSide": "bottom", "toFrac": 0.8333333333333334, "fromSide": "top", "fromFrac": 0.18627450980392157}, "proj_db_excl": {"toSide": "bottom", "toFrac": 0.5392156862745098, "fromSide": "top", "fromFrac": 0.09803921568627451}, "itrt_ocp_alloc": {"fromSide": "top", "fromFrac": 0.015756302521008403, "toSide": "bottom", "toFrac": 0.0872093023255814}, "itrt_itmnt_sub_app": {"fromSide": "top", "fromFrac": 0.028361344537815126, "toSide": "bottom", "toFrac": 0}, "hyp_fallout": {"toSide": "bottom", "toFrac": 0.6325301204819277}, "proj_devops": {"toSide": "bottom", "toFrac": 0.8132530120481928, "fromSide": "top", "fromFrac": 0.8431372549019608}, "itrt_servers_phys": {"toSide": "bottom", "toFrac": 0.49137931034482757, "fromSide": "top", "fromFrac": 0.5063025210084033}, "nd_biz": {"toSide": "bottom", "toFrac": 0.7616279069767442, "fromSide": "top", "fromFrac": 0.17857142857142858}, "srv_db_ent": {"toSide": "left", "toFrac": 0.4404760996500651, "fromSide": "left", "fromFrac": 0}, "itrt_proj_fa_OLD": {"toSide": "bottom", "toFrac": 0.6470588235294118, "fromSide": "top", "fromFrac": 0.9275210084033614}, "itrt_proj_labor_OLD": {"toSide": "bottom", "toFrac": 0.8333333333333334, "fromSide": "top", "fromFrac": 0.9086134453781513}, "proj_phys": {"fromSide": "top", "fromFrac": 0.28431372549019607, "toSide": "bottom", "toFrac": 0.6810344827586207}, "itrt_towers_proj_labor": {"toSide": "bottom", "toFrac": 0.7156862745098039, "fromSide": "top", "fromFrac": 0.9453781512605042}, "cs_projects": {"toSide": "bottom", "toFrac": 1}, "itrt_proj_remaining": {"fromSide": "top", "fromFrac": 0.9600840336134454, "toSide": "bottom", "toFrac": 0.08823529411764706}, "itrt_towers_proj_fa": {"fromSide": "top", "fromFrac": 0.9810924369747899, "toSide": "bottom", "toFrac": 0.4019607843137255}, "proj_tick": {"fromSide": "top", "fromFrac": 1, "toSide": "bottom", "toFrac": 0.5609756097560976}, "proj_dc": {"fromSide": "top", "fromFrac": 0.5196078431372549, "toSide": "bottom", "toFrac": 0.9130434782608695}, "proj_eud": {"fromSide": "top", "fromFrac": 0.4019607843137255, "toSide": "bottom", "toFrac": 0.9017857142857143}, "nd_eud": {"toSide": "bottom", "toFrac": 0.11607142857142858, "fromSide": "top", "fromFrac": 0.45535714285714285}, "itrt_cloud_cpds": {"fromSide": "top", "fromFrac": 0.24789915966386555}, "db_sql": {"toSide": "bottom", "toFrac": 0, "fromSide": "top", "fromFrac": 0.17647058823529413}, "ps_srv": {"toSide": "bottom", "toFrac": 0.5833333333333334, "fromSide": "top", "fromFrac": 0.034482758620689655}, "db_oracle": {"toSide": "bottom", "toFrac": 0.08333333333333333, "fromSide": "top", "fromFrac": 0.29411764705882354}, "db_enterprise": {"toSide": "bottom", "toFrac": 0.17424242424242425}, "db_mongo": {"toSide": "bottom", "toFrac": 0.24242424242424243, "fromSide": "top", "fromFrac": 0.5}, "db_exadata": {"fromSide": "top", "fromFrac": 0.6078431372549019, "toSide": "bottom", "toFrac": 0.3333333333333333}, "db_nonstop": {"fromSide": "top", "fromFrac": 0.7058823529411765, "toSide": "bottom", "toFrac": 0.4015151515151515}, "ps_nonstop": {"fromSide": "top", "fromFrac": 0.29310344827586204, "toSide": "bottom", "toFrac": 0.7121212121212122}, "ps_hyp": {"fromSide": "top", "fromFrac": 0.6120689655172413}, "hyp_vms_h": {"toSide": "bottom", "toFrac": 0.7954545454545454, "fromSide": "top", "fromFrac": 0.14705882352941177}, "hyp_vms_nh": {"toSide": "bottom", "toFrac": 0.8712121212121212, "fromSide": "top", "fromFrac": 0.3627450980392157}, "stor_srv": {"toSide": "bottom", "toFrac": 0.9242424242424242, "fromSide": "top", "fromFrac": 0.021739130434782608}, "tick_srv": {"fromSide": "top", "fromFrac": 0.24390243902439024, "toSide": "bottom", "toFrac": 1}, "itrt_network": {"toSide": "bottom", "toFrac": 0.49107142857142855, "fromSide": "top", "fromFrac": 0.8287815126050421}, "sd_stor": {"toSide": "bottom", "toFrac": 0.5217391304347826}, "itrt_storage": {"toSide": "bottom", "toFrac": 0.010869565217391304, "fromSide": "top", "fromFrac": 0.6186974789915967}, "tick_apps": {"fromSide": "top", "fromFrac": 0.8902439024390244, "toSide": "bottom", "toFrac": 1}, "eud_biz": {"toSide": "bottom", "toFrac": 0.8313953488372093}, "ocp_itrt": {"fromSide": "top", "fromFrac": 0.14942528735632185, "toSide": "bottom", "toFrac": 0.08928571428571429}, "srv_fallout": {"toSide": "bottom", "toFrac": 0.536144578313253, "fromSide": "top", "fromFrac": 0.696969696969697}, "srv_exadata": {"toSide": "bottom", "toFrac": 0.39156626506024095, "fromSide": "top", "fromFrac": 0.5227272727272727}, "srv_nonstop": {"toSide": "bottom", "toFrac": 0.25301204819277107, "fromSide": "top", "fromFrac": 0.3484848484848485}, "nd_dc": {"toSide": "bottom", "toFrac": 0.29347826086956524, "fromSide": "top", "fromFrac": 0.75}, "rack_phys": {"fromSide": "left", "fromFrac": 0.5079366895887587}, "rack_srv_net": {"fromSide": "top", "fromFrac": 0.5980392156862745, "toSide": "bottom", "toFrac": 0.9696969696969697}, "rack_stor": {"toSide": "bottom", "toFrac": 0.6847826086956522, "fromSide": "top", "fromFrac": 0.3431372549019608}, "nd_storage": {"fromSide": "top", "fromFrac": 0.026785714285714284}, "cs_fa_no_amort": {"fromSide": "top", "fromFrac": 0.5058139534883721}, "cs_market_data": {"fromSide": "top", "fromFrac": 0.5058139534883721}, "cs_cons_labor": {"fromSide": "top", "fromFrac": 0.5058139534883721}, "cs_fa_amort": {"fromSide": "top", "fromFrac": 0.5}};
+let endpointOverrides={"labor_exec":{"toSide":"bottom","toFrac":0.5598739495798319,"fromSide":"top","fromFrac":1},"fal_itrt":{"toSide":"bottom","toFrac":0.27310924369747897},"tt_itrt":{"toSide":"bottom","toFrac":0.45063025210084034,"fromSide":"top","fromFrac":0.514018691588785},"vend_itrt":{"toSide":"bottom","toFrac":0.707983193277311},"labor_ext_no_tt":{"toSide":"bottom","toFrac":0.3487394957983193},"vend_mktdata":{"toSide":"bottom","toFrac":0.7510504201680672},"vend_csp":{"fromSide":"right","fromFrac":0},"ocp_dc_itrt":{"toSide":"bottom","toFrac":0.14915966386554622,"fromSide":"top","fromFrac":0.7931034482758621},"vend_apps_itrt":{"toSide":"bottom","toFrac":0.6638655462184874},"csp_google":{"toSide":"bottom","toFrac":0.8403361344537815,"fromSide":"top","fromFrac":0.21568627450980393},"csp_aws":{"toSide":"bottom","toFrac":0.9023109243697479,"fromSide":"top","fromFrac":0.7843137254901961},"labor_tt_int":{"toSide":"bottom","toFrac":0.11214953271028037},"labor_fallout":{"toSide":"bottom","toFrac":0.8878504672897196},"itrt_itmnt_svc":{"fromSide":"right","fromFrac":0,"toSide":"bottom","toFrac":0.9651162790697675},"itrt_proj_labor":{"fromSide":"top","fromFrac":0.9411764705882353},"itrt_proj_fa":{"fromSide":"top","fromFrac":0.9537815126050421},"itrt_mktdata_svc":{"fromSide":"top","fromFrac":0.007352941176470588,"toSide":"bottom","toFrac":0.040697674418604654},"itrt_amort_fa":{"toSide":"bottom","toFrac":0.5111111111111111,"fromSide":"top","fromFrac":0.10084033613445378},"itrt_direct_svc_OLD":{"fromSide":"top","fromFrac":0,"toSide":"bottom","toFrac":0},"itrt_db_service":{"fromSide":"top","fromFrac":0.3539915966386555,"toSide":"bottom","toFrac":0.0392156862745098},"proj_app_svcs":{"fromSide":"top","fromFrac":0.9019607843137255,"toSide":"bottom","toFrac":0.8614457831325302},"proj_biz":{"fromSide":"top","fromFrac":0.9607843137254902,"toSide":"bottom","toFrac":0.9069767441860465},"srv_app":{"toSide":"bottom","toFrac":0.12650602409638553,"fromSide":"top","fromFrac":0.1893939393939394},"proj_apps":{"toSide":"bottom","toFrac":0.7108433734939759,"fromSide":"top","fromFrac":0.7843137254901961},"cs_acds_c":{"toSide":"bottom","toFrac":0.060240963855421686},"itrt_db_vendor":{"toSide":"bottom","toFrac":0.30392156862745096,"fromSide":"top","fromFrac":0.38130252100840334},"itrt_direct_svc_new":{"fromSide":"right","fromFrac":0.7402607310901989,"toSide":"right","toFrac":1},"proj_db_ns":{"toSide":"bottom","toFrac":0.8333333333333334,"fromSide":"top","fromFrac":0.18627450980392157},"proj_db_excl":{"toSide":"bottom","toFrac":0.5392156862745098,"fromSide":"top","fromFrac":0.09803921568627451},"itrt_ocp_alloc":{"fromSide":"top","fromFrac":0.015756302521008403,"toSide":"bottom","toFrac":0.0872093023255814},"itrt_itmnt_sub_app":{"fromSide":"top","fromFrac":0.028361344537815126,"toSide":"bottom","toFrac":0},"hyp_fallout":{"toSide":"bottom","toFrac":0.6325301204819277},"proj_devops":{"toSide":"bottom","toFrac":0.8132530120481928,"fromSide":"top","fromFrac":0.8431372549019608},"itrt_servers_phys":{"toSide":"bottom","toFrac":0.49137931034482757,"fromSide":"top","fromFrac":0.5063025210084033},"nd_biz":{"toSide":"bottom","toFrac":0.7616279069767442,"fromSide":"top","fromFrac":0.17857142857142858},"srv_db_ent":{"toSide":"left","toFrac":0.4404760996500651,"fromSide":"left","fromFrac":0},"itrt_proj_fa_OLD":{"toSide":"bottom","toFrac":0.6470588235294118,"fromSide":"top","fromFrac":0.9275210084033614},"itrt_proj_labor_OLD":{"toSide":"bottom","toFrac":0.8333333333333334,"fromSide":"top","fromFrac":0.9086134453781513},"proj_phys":{"fromSide":"top","fromFrac":0.28431372549019607,"toSide":"bottom","toFrac":0.6810344827586207},"itrt_towers_proj_labor":{"toSide":"bottom","toFrac":0.7156862745098039,"fromSide":"top","fromFrac":0.9453781512605042},"cs_projects":{"toSide":"bottom","toFrac":1},"itrt_proj_remaining":{"fromSide":"top","fromFrac":0.9600840336134454,"toSide":"bottom","toFrac":0.08823529411764706},"itrt_towers_proj_fa":{"fromSide":"top","fromFrac":0.9810924369747899,"toSide":"bottom","toFrac":0.4019607843137255},"proj_tick":{"fromSide":"top","fromFrac":1,"toSide":"bottom","toFrac":0.5609756097560976},"proj_dc":{"fromSide":"top","fromFrac":0.5196078431372549,"toSide":"bottom","toFrac":0.9130434782608695},"proj_eud":{"fromSide":"top","fromFrac":0.4019607843137255,"toSide":"bottom","toFrac":0.9017857142857143},"nd_eud":{"toSide":"bottom","toFrac":0.11607142857142858,"fromSide":"top","fromFrac":0.45535714285714285},"itrt_cloud_cpds":{"fromSide":"top","fromFrac":0.24789915966386555},"db_sql":{"toSide":"bottom","toFrac":0,"fromSide":"top","fromFrac":0.17647058823529413},"ps_srv":{"toSide":"bottom","toFrac":0.5833333333333334,"fromSide":"top","fromFrac":0.034482758620689655},"db_oracle":{"toSide":"bottom","toFrac":0.08333333333333333,"fromSide":"top","fromFrac":0.29411764705882354},"db_enterprise":{"toSide":"bottom","toFrac":0.17424242424242425},"db_mongo":{"toSide":"bottom","toFrac":0.24242424242424243,"fromSide":"top","fromFrac":0.5},"db_exadata":{"fromSide":"top","fromFrac":0.6078431372549019,"toSide":"bottom","toFrac":0.3333333333333333},"db_nonstop":{"fromSide":"top","fromFrac":0.7058823529411765,"toSide":"bottom","toFrac":0.4015151515151515},"ps_nonstop":{"fromSide":"top","fromFrac":0.29310344827586204,"toSide":"bottom","toFrac":0.7121212121212122},"ps_hyp":{"fromSide":"top","fromFrac":0.6120689655172413},"hyp_vms_h":{"toSide":"bottom","toFrac":0.7954545454545454,"fromSide":"top","fromFrac":0.14705882352941177},"hyp_vms_nh":{"toSide":"bottom","toFrac":0.8712121212121212,"fromSide":"top","fromFrac":0.3627450980392157},"stor_srv":{"toSide":"bottom","toFrac":0.9242424242424242,"fromSide":"top","fromFrac":0.021739130434782608},"tick_srv":{"fromSide":"top","fromFrac":0.24390243902439024,"toSide":"bottom","toFrac":1},"itrt_network":{"toSide":"bottom","toFrac":0.49107142857142855,"fromSide":"top","fromFrac":0.8287815126050421},"sd_stor":{"toSide":"bottom","toFrac":0.5217391304347826},"itrt_storage":{"toSide":"bottom","toFrac":0.010869565217391304,"fromSide":"top","fromFrac":0.6186974789915967},"tick_apps":{"fromSide":"top","fromFrac":0.8902439024390244,"toSide":"bottom","toFrac":1},"eud_biz":{"toSide":"bottom","toFrac":0.8313953488372093},"ocp_itrt":{"fromSide":"top","fromFrac":0.14942528735632185,"toSide":"bottom","toFrac":0.08928571428571429},"srv_fallout":{"toSide":"bottom","toFrac":0.536144578313253,"fromSide":"top","fromFrac":0.696969696969697},"srv_exadata":{"toSide":"bottom","toFrac":0.39156626506024095,"fromSide":"top","fromFrac":0.5227272727272727},"srv_nonstop":{"toSide":"bottom","toFrac":0.25301204819277107,"fromSide":"top","fromFrac":0.3484848484848485},"nd_dc":{"toSide":"bottom","toFrac":0.29347826086956524,"fromSide":"top","fromFrac":0.75},"rack_phys":{"fromSide":"left","fromFrac":0.5079366895887587},"rack_srv_net":{"fromSide":"top","fromFrac":0.5980392156862745,"toSide":"bottom","toFrac":0.9696969696969697},"rack_stor":{"toSide":"bottom","toFrac":0.6847826086956522,"fromSide":"top","fromFrac":0.3431372549019608},"nd_storage":{"fromSide":"top","fromFrac":0.026785714285714284},"cs_fa_no_amort":{"fromSide":"top","fromFrac":0.5058139534883721},"cs_market_data":{"fromSide":"top","fromFrac":0.5058139534883721},"cs_cons_labor":{"fromSide":"top","fromFrac":0.5058139534883721},"cs_fa_amort":{"fromSide":"top","fromFrac":0.5}};
 // fracs are 0..1 along the node's attachment edge
 
 function loadEndpointOverrides(){
@@ -323,7 +497,7 @@ function saveEndpointOverrides(){
 }
 loadEndpointOverrides();
 
-let routeOverrides={"cs_projects": {"yOff": 157}, "labor_ext_no_tt": {"yOff": 58}, "vend_apps_itrt": {}, "fal_itrt": {}, "labor_exec": {"yOff": 58}, "ocp_dc_itrt": {}, "csp_aws": {}, "csp_google": {}, "itrt_proj_fa": {}, "itrt_amort_fa": {}, "proj_app_svcs": {"yOff": -220}, "itrt_direct_svc_OLD": {"yOff": -379}, "itrt_cloud_cpds": {}, "proj_db_excl": {"yOff": 19}, "proj_db_ns": {"yOff": 9}, "itrt_mktdata_svc": {"yOff": -369}, "itrt_ocp_alloc": {"yOff": -360}, "itrt_itmnt_sub_app": {"yOff": -264}, "cs_acds_c": {"yOff": -105}, "proj_biz": {"yOff": -329}, "itrt_itmnt_svc": {"xOff": 427}, "itrt_direct_svc_new": {"xOff": 421}, "srv_db_ent": {"xOff": -36}, "nd_biz": {"yOff": -269}, "itrt_network": {}, "itrt_proj_labor_OLD": {"yOff": 0}, "itrt_proj_fa_OLD": {}, "itrt_towers_proj_labor": {}, "itrt_proj_remaining": {}, "itrt_towers_proj_fa": {}, "proj_tick": {}, "proj_dc": {}, "proj_eud": {"yOff": 9}, "db_sql": {}, "ps_srv": {}, "proj_apps": {"yOff": -204}, "db_oracle": {}, "tick_apps": {"yOff": -165}, "proj_devops": {"yOff": -212}, "hyp_fallout": {"yOff": -30}, "hyp_vms_h": {"yOff": 13}, "tick_srv": {"yOff": -105}, "proj_phys": {"yOff": 63}, "eud_biz": {"yOff": -237}, "nd_dc": {}, "hyp_vms_nh": {"yOff": 6}, "rack_srv_net": {"yOff": -42}, "itrt_storage": {"yOff": -117}, "rack_stor": {}, "stor_srv": {}, "cs_fa_amort": {"yOff": 1}, "cs_fa_no_amort": {"yOff": 1}, "cs_overhead": {"yOff": 1}, "opex_var_cs": {"yOff": 0}};
+let routeOverrides={"cs_projects":{"yOff":157},"labor_ext_no_tt":{"yOff":58},"vend_apps_itrt":{},"fal_itrt":{},"labor_exec":{"yOff":58},"ocp_dc_itrt":{},"csp_aws":{},"csp_google":{},"itrt_proj_fa":{},"itrt_amort_fa":{},"proj_app_svcs":{"yOff":-220},"itrt_direct_svc_OLD":{"yOff":-379},"itrt_cloud_cpds":{},"proj_db_excl":{"yOff":19},"proj_db_ns":{"yOff":9},"itrt_mktdata_svc":{"yOff":-369},"itrt_ocp_alloc":{"yOff":-360},"itrt_itmnt_sub_app":{"yOff":-264},"cs_acds_c":{"yOff":-105},"proj_biz":{"yOff":-329},"itrt_itmnt_svc":{"xOff":427},"itrt_direct_svc_new":{"xOff":421},"srv_db_ent":{"xOff":-36},"nd_biz":{"yOff":-269},"itrt_network":{},"itrt_proj_labor_OLD":{"yOff":0},"itrt_proj_fa_OLD":{},"itrt_towers_proj_labor":{},"itrt_proj_remaining":{},"itrt_towers_proj_fa":{},"proj_tick":{},"proj_dc":{},"proj_eud":{"yOff":9},"db_sql":{},"ps_srv":{},"proj_apps":{"yOff":-204},"db_oracle":{},"tick_apps":{"yOff":-165},"proj_devops":{"yOff":-212},"hyp_fallout":{"yOff":-30},"hyp_vms_h":{"yOff":13},"tick_srv":{"yOff":-105},"proj_phys":{"yOff":63},"eud_biz":{"yOff":-237},"nd_dc":{},"hyp_vms_nh":{"yOff":6},"rack_srv_net":{"yOff":-42},"itrt_storage":{"yOff":-117},"rack_stor":{},"stor_srv":{},"cs_fa_amort":{"yOff":1},"cs_fa_no_amort":{"yOff":1},"cs_overhead":{"yOff":1},"opex_var_cs":{"yOff":0}};
 
 function loadRouteOverrides(){
   try{const d=localStorage.getItem(ROUTES_KEY);if(d) routeOverrides=JSON.parse(d);}catch(e){}
@@ -335,130 +509,21 @@ loadRouteOverrides();
 
 const LS_KEY='rj_pipeline_layout_v1';
 
-// Layout positions from correct snapshot 2026-08-11 (_1_)
-const BAKED_LAYOUT = {
-  "consumption": {
-    "x": 490,
-    "y": 40
-  },
-  "biz_svcs": {
-    "x": 460,
-    "y": 210
-  },
-  "rj_tower_svc": {
-    "x": 734,
-    "y": 174
-  },
-  "applications": {
-    "x": 474,
-    "y": 341
-  },
-  "acds": {
-    "x": 463,
-    "y": 408
-  },
-  "cloud_svcs": {
-    "x": 289,
-    "y": 738
-  },
-  "servers": {
-    "x": 460,
-    "y": 537
-  },
-  "hypervisor": {
-    "x": 604,
-    "y": 636
-  },
-  "phys_server": {
-    "x": 534,
-    "y": 704
-  },
-  "storage": {
-    "x": 742,
-    "y": 634
-  },
-  "storage_devices": {
-    "x": 735,
-    "y": 747
-  },
-  "databases": {
-    "x": 441,
-    "y": 831
-  },
-  "cpds": {
-    "x": 285,
-    "y": 827
-  },
-  "fa_amort_obj": {
-    "x": 160,
-    "y": 829
-  },
-  "tickets": {
-    "x": 1178,
-    "y": 809
-  },
-  "eud": {
-    "x": 880,
-    "y": 770
-  },
-  "data_centers": {
-    "x": 1027,
-    "y": 769
-  },
-  "network_devices": {
-    "x": 842,
-    "y": 852
-  },
-  "projects": {
-    "x": 1058,
-    "y": 936
-  },
-  "rj_dc_rack": {
-    "x": 1009,
-    "y": 700
-  },
-  "itrt": {
-    "x": 109,
-    "y": 1034
-  },
-  "time_tracking": {
-    "x": 484,
-    "y": 1137
-  },
-  "labor": {
-    "x": 496,
-    "y": 1249
-  },
-  "vendors": {
-    "x": 742,
-    "y": 1249
-  },
-  "fixed_asset_ledger": {
-    "x": 327,
-    "y": 1242
-  },
-  "other_cost_pools": {
-    "x": 182,
-    "y": 1242
-  },
-  "cloud_sp": {
-    "x": 887,
-    "y": 1158
-  },
-  "cost_source": {
-    "x": 450,
-    "y": 1430
-  },
-  "opex_fixed": {
-    "x": 413,
-    "y": 1517
-  },
-  "opex_var": {
-    "x": 570,
-    "y": 1516
-  }
-};
+function loadLayout(){
+  try{
+    const saved=localStorage.getItem(LS_KEY);
+    if(saved){
+      const positions=JSON.parse(saved);
+      NODE_DEFAULTS.forEach(n=>{
+        if(positions[n.id]){n.x=positions[n.id].x;n.y=positions[n.id].y;}
+      });
+    }
+  }catch(e){}
+}
+loadLayout(); (function(){const _pos={"consumption":{"x":490,"y":40},"biz_svcs":{"x":460,"y":210},"rj_tower_svc":{"x":734,"y":174},"applications":{"x":474,"y":341},"acds":{"x":463,"y":408},"cloud_svcs":{"x":289,"y":738},"servers":{"x":460,"y":537},"hypervisor":{"x":604,"y":636},"phys_server":{"x":534,"y":704},"storage":{"x":742,"y":634},"storage_devices":{"x":735,"y":747},"databases":{"x":441,"y":831},"cpds":{"x":285,"y":827},"fa_amort_obj":{"x":160,"y":829},"tickets":{"x":1178,"y":809},"eud":{"x":880,"y":770},"data_centers":{"x":1027,"y":769},"network_devices":{"x":842,"y":852},"projects":{"x":1058,"y":936},"rj_dc_rack":{"x":1009,"y":700},"itrt":{"x":109,"y":1034},"time_tracking":{"x":484,"y":1137},"labor":{"x":496,"y":1249},"vendors":{"x":742,"y":1249},"fixed_asset_ledger":{"x":327,"y":1242},"other_cost_pools":{"x":182,"y":1242},"cloud_sp":{"x":887,"y":1158},"cost_source":{"x":450,"y":1430},"opex_fixed":{"x":413,"y":1517},"opex_var":{"x":570,"y":1516}};NODE_DEFAULTS.forEach(n=>{if(_pos[n.id]){n.x=_pos[n.id].x;n.y=_pos[n.id].y;}});})();
 
+// Deep-copy nodes (so we can reset)
+const NODES=NODE_DEFAULTS.map(n=>({...n,lbl:[...n.lbl]}));
 const N={};NODES.forEach(n=>N[n.id]=n);
 
 function saveLayout(){
@@ -471,8 +536,26 @@ function saveLayout(){
   setTimeout(()=>{btn.textContent=orig;btn.style.color='';},1500);
 }
 
+function resetEndpoints(){
+  if(!confirm('Reset all endpoint positions back to auto?')) return;
+  endpointOverrides={};
+  localStorage.removeItem(ENDPOINTS_KEY);
+  recomputeAll();render();
+}
 
+function resetLines(){
+  if(!confirm('Reset all line routes back to auto-routing?')) return;
+  routeOverrides={};
+  localStorage.removeItem(ROUTES_KEY);
+  recomputeAll();render();
+}
 
+function resetLayout(){
+  if(!confirm('Reset all node positions to default?')) return;
+  localStorage.removeItem(LS_KEY);
+  NODE_DEFAULTS.forEach(d=>{const n=N[d.id];n.x=d.x;n.y=d.y;});
+  recomputeAll(); render();
+}
 
 
 function exportFullSnapshot(){
@@ -574,7 +657,17 @@ ctx.scale(DPR,DPR);
 // ═══════════════════════════════════════════
 // ROUTING + JUMPS
 // ═══════════════════════════════════════════
-// pairGroups computed in syncFromSheets after loading from sheet
+const pairGroups={};
+ALLOCS.forEach(a=>{
+  const k=a.from+'→'+a.to;
+  if(!pairGroups[k]) pairGroups[k]=[];
+  pairGroups[k].push(a.id);
+});
+ALLOCS.forEach(a=>{
+  const k=a.from+'→'+a.to;
+  a._pt=pairGroups[k].length;
+  a._pi=pairGroups[k].indexOf(a.id);
+});
 
 function computeRoute(a){
   const fn=N[a.from],tn=N[a.to]; if(!fn||!tn) return null;
@@ -707,7 +800,6 @@ recomputeAll();
 // LINE COLOR
 // ═══════════════════════════════════════════
 function lc(a){
-  if(a.colorOverride) return a.colorOverride;
   if(a.to==='consumption') return '#7c3aed';
   if(a.to==='itrt'||a.from==='itrt') return '#0d9488';
   if(a.to==='biz_svcs') return '#d97706';
@@ -779,7 +871,7 @@ function lhex(hex,a){
 function drawNode(n,hl,selected){
   ctx.shadowColor=selected?'#2563eb':hl?'#94a3b8':'transparent';
   ctx.shadowBlur=selected?14:hl?8:0;
-  ctx.fillStyle=n.colorOverride||n.col;
+  ctx.fillStyle=n.col;
   ctx.strokeStyle=selected?'#2563eb':hl?lhex(n.col,60):'rgba(0,0,0,0.18)';
   ctx.lineWidth=selected?2.5:hl?1.5:1;
   rrect(n.x,n.y,n.w,n.h,7);ctx.fill();ctx.stroke();
@@ -930,28 +1022,24 @@ function getPos(e){
 // ═══════════════════════════════════════════
 // PANEL
 // ═══════════════════════════════════════════
-function renderAllocPanel(a){
+function renderAllocPanel(a, _unused){
   document.getElementById('panel-title').textContent=a.name;
   document.getElementById('panel-type').textContent='Allocation rule';
   const fn=N[a.from],tn=N[a.to];
   const arrowColor=a.colorOverride||lc(a);
   let h=`<div class="pft">
     <span class="pbf">${fn?.lbl.join(' ')||a.from}</span>
-    <span class="parr" style="color:${arrowColor}">→</span>
+    <span class="parr" style="color:${arrowColor}">&#8594;</span>
     <span class="pbt">${tn?.lbl.join(' ')||a.to}</span>
-    <span style="display:inline-block;width:14px;height:14px;background:${arrowColor};border-radius:3px;margin-left:6px;vertical-align:middle;border:1px solid rgba(0,0,0,.1)" title="Arrow color: ${arrowColor}"></span>
-    ${a.colorOverride?`<span style="font-size:9px;color:#a08070;margin-left:4px">${a.colorOverride} (custom)</span>`:`<span style="font-size:9px;color:#a08070;margin-left:4px">default color</span>`}
   </div>`;
-  h+=`<div class="psl">Technical overview</div><div class="pf">${a.overview||'—'}</div>`;
-  h+=`<div class="psl">In plain terms</div><div class="pf pfl">${a.layman||'—'}</div>`;
+  h+=`<div class="psl">Technical overview</div><div class="pf">${a.overview||'&#8212;'}</div>`;
+  h+=`<div class="psl">In plain terms</div><div class="pf pfl">${a.layman||'&#8212;'}</div>`;
   h+=`<div class="psl">From conditions</div>`;
-  h+=a.fromCond&&a.fromCond!=='None'?`<div class="pc">${a.fromCond}</div>`:'<p class="pnc">No conditions — all records included</p>';
+  h+=a.fromCond&&a.fromCond!=='None'?`<div class="pc">${a.fromCond}</div>`:'<p class="pnc">No conditions</p>';
   h+=`<div class="psl">To conditions</div>`;
-  h+=a.toCond&&a.toCond!=='None'?`<div class="pc">${a.toCond}</div>`:'<p class="pnc">No conditions on destination</p>';
-  h+=`<div class="psl" style="margin-top:16px">Notes <span style="font-size:9px;color:#a08070;font-weight:400">(from Google Sheets column H)</span></div>`;
-  h+=a.notes
-    ?`<div class="pf" style="background:#fefce8;border-color:#fde68a;color:#78350f">${a.notes}</div>`
-    :`<p class="pnc">No notes — add them in Google Sheets column H</p>`;
+  h+=a.toCond&&a.toCond!=='None'?`<div class="pc">${a.toCond}</div>`:'<p class="pnc">No conditions</p>';
+  h+=`<div class="psl" style="margin-top:16px">Notes <span style="font-size:9px;color:#a08070;font-weight:400">(from Google Sheets column I)</span></div>`;
+  h+=a.notes?`<div class="pf" style="background:#fefce8;border-color:#fde68a;color:#78350f">${a.notes}</div>`:'<p class="pnc">No notes</p>';
   document.getElementById('panel-body').innerHTML=h;
 }
 
@@ -963,7 +1051,7 @@ function openAllocPanel(a){
   render();
 }
 
-function renderNodePanel(n){
+function renderNodePanel(n, _unused){
   const id=n.id;
   const inb=ALLOCS.filter(a=>a.to===id);
   const outb=ALLOCS.filter(a=>a.from===id);
@@ -978,20 +1066,17 @@ function renderNodePanel(n){
     const other=dir==='in'?N[a.from]:N[a.to];
     const otherLbl=other?.lbl.join(' ')||(dir==='in'?a.from:a.to);
     const badge=dir==='in'?'<span class="ib">IN</span>':'<span class="ob">OUT</span>';
-    const condFrom=a.fromCond&&a.fromCond!=='None'?`<div class="arow-detail-cond">${a.fromCond}</div>`:'<p class="arow-no-cond">No conditions</p>';
-    const condTo=a.toCond&&a.toCond!=='None'?`<div class="arow-detail-cond">${a.toCond}</div>`:'<p class="arow-no-cond">No conditions</p>';
-    const noteHtml=a.notes?`<div class="arow-detail-sec">Notes</div><div class="arow-notes-box">${a.notes}</div>`:'';
+    const cF=a.fromCond&&a.fromCond!=='None'?`<div class="arow-detail-cond">${a.fromCond}</div>`:'<p class="arow-no-cond">No conditions</p>';
+    const cT=a.toCond&&a.toCond!=='None'?`<div class="arow-detail-cond">${a.toCond}</div>`:'<p class="arow-no-cond">No conditions</p>';
+    const nH=a.notes?`<div class="arow-detail-sec">Notes</div><div class="arow-notes-box">${a.notes}</div>`:'';
     return `<div class="arow" onclick="toggleAccordion('acc-${a.id}',this)">
-      <div class="arow-header">
-        <div><div class="arname">${badge}${a.name}</div><div class="ardir">${dir==='in'?'From':'To'}: ${otherLbl}</div></div>
-        <span class="arow-chevron" id="chev-${a.id}">›</span>
-      </div>
+      <div class="arow-header"><div><div class="arname">${badge}${a.name}</div><div class="ardir">${dir==='in'?'From':'To'}: ${otherLbl}</div></div>
+      <span class="arow-chevron" id="chev-${a.id}">&#8250;</span></div>
       <div class="arow-body" id="acc-${a.id}">
-        <div class="arow-detail-sec">Technical overview</div><div class="arow-detail-box">${a.overview||'—'}</div>
-        <div class="arow-detail-sec">In plain terms</div><div class="arow-detail-box layman">${a.layman||'—'}</div>
-        <div class="arow-detail-sec">From conditions</div>${condFrom}
-        <div class="arow-detail-sec">To conditions</div>${condTo}
-        ${noteHtml}
+        <div class="arow-detail-sec">Technical overview</div><div class="arow-detail-box">${a.overview||'&#8212;'}</div>
+        <div class="arow-detail-sec">In plain terms</div><div class="arow-detail-box layman">${a.layman||'&#8212;'}</div>
+        <div class="arow-detail-sec">From conditions</div>${cF}
+        <div class="arow-detail-sec">To conditions</div>${cT}${nH}
       </div></div>`;
   }
   if(inb.length){h+=`<div class="psl">Inbound</div><div class="csec">${inb.length} rule${inb.length>1?'s':''} in</div>`;inb.forEach(a=>{h+=allocRow(a,'in');});}
@@ -1249,164 +1334,83 @@ function applySheetRows(rows) {
 }
 
 
-// ── NODE NAME → ID MAPPING ────────────────────────────────────
-// Maps Google Sheet "From"/"To" values to internal node IDs
-// Add aliases here if sheet uses different names
-const NODE_NAME_MAP = {
-  'consumption source':'consumption',
-  'business services':'biz_svcs',
+const NODE_NAME_MAP={
+  'consumption source':'consumption','business services':'biz_svcs',
   'rj tower to service mapping transform':'rj_tower_svc',
-  'rj tower→service mapping transform':'rj_tower_svc',
-  'rj tower to service mapping':'rj_tower_svc',
-  'applications':'applications',
-  'application cost driver stage':'acds',
-  'cloud services':'cloud_svcs',
-  'servers':'servers',
-  'hypervisor':'hypervisor',
-  'physical server':'phys_server',
-  'storage':'storage',
-  'storage devices':'storage_devices',
-  'databases':'databases',
-  'cloud provider cost driver stage':'cpds',
-  'fixed asset amortization':'fa_amort_obj',
-  'tickets':'tickets',
-  'end user devices':'eud',
-  'data centers':'data_centers',
-  'network devices':'network_devices',
-  'projects':'projects',
+  'rj tower-service mapping transform':'rj_tower_svc',
+  'applications':'applications','application cost driver stage':'acds',
+  'cloud services':'cloud_svcs','servers':'servers','hypervisor':'hypervisor',
+  'physical server':'phys_server','storage':'storage',
+  'storage devices':'storage_devices','databases':'databases',
+  'cloud provider cost driver stage':'cpds','fixed asset amortization':'fa_amort_obj',
+  'tickets':'tickets','end user devices':'eud','data centers':'data_centers',
+  'network devices':'network_devices','projects':'projects',
   'rj data center rack usage consolidation':'rj_dc_rack',
-  'rj dc rack usage consol.':'rj_dc_rack',
-  'rj data center rack usage consol.':'rj_dc_rack',
-  'rj data center rack':'rj_dc_rack',
-  'it resource towers':'itrt',
-  'time tracking':'time_tracking',
-  'labor':'labor',
-  'vendors':'vendors',
-  'fixed asset ledger':'fixed_asset_ledger',
-  'other cost pools':'other_cost_pools',
-  'cloud service provider':'cloud_sp',
-  'cost source':'cost_source',
-  'opex fixed':'opex_fixed',
-  'opex variable':'opex_var',
+  'rj dc rack usage consol.':'rj_dc_rack','rj data center rack':'rj_dc_rack',
+  'it resource towers':'itrt','time tracking':'time_tracking',
+  'labor':'labor','vendors':'vendors','fixed asset ledger':'fixed_asset_ledger',
+  'other cost pools':'other_cost_pools','cloud service provider':'cloud_sp',
+  'cost source':'cost_source','opex fixed':'opex_fixed','opex variable':'opex_var',
 };
-
 function resolveNode(name){
   if(!name) return null;
-  const lc=name.trim().toLowerCase();
-  return NODE_NAME_MAP[lc]||null;
+  return NODE_NAME_MAP[name.trim().toLowerCase()]||null;
 }
-
 async function syncFromSheets(){
-  setSyncState('loading','Loading allocations from Google Sheets...');
+  setSyncState('loading','Loading from Google Sheets...');
   try{
     const resp=await fetch('https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/export?format=csv&gid=0');
-    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
     const text=await resp.text();
     const lines=text.split(/\r?\n/).filter(l=>l.trim());
-    if(lines.length<2) throw new Error('Sheet appears empty — add allocation rows to continue');
-
-    // Parse headers
-    const rawHeaders=parseCSVLine(lines[0]);
-    const headers=rawHeaders.map(h=>{
+    if(lines.length<2) throw new Error('Sheet appears empty');
+    const rawH=parseCSVLine(lines[0]);
+    const headers=rawH.map(h=>{
       const lc=h.toLowerCase().trim().replace(/"/g,'');
-      const map={
-        'allocation id':'sheetId','id':'sheetId',
-        'from (source object)':'from','from':'from',
-        'to (destination object)':'to','to':'to',
-        'allocation name':'name','name':'name',
-        'from conditions':'fromCond','fromcond':'fromCond',
-        'to conditions':'toCond','tocond':'toCond',
+      const m={'allocation id':'sheetId','id':'sheetId','from (source object)':'from','from':'from',
+        'to (destination object)':'to','to':'to','allocation name':'name','name':'name',
+        'from conditions':'fromCond','fromcond':'fromCond','to conditions':'toCond','tocond':'toCond',
         'allocation overview / strategy / purpose':'overview','overview':'overview',
-        "layman's summary (elevator pitch)":'layman','layman':'layman',
-        'notes':'notes',
-        'color':'color','arrow color':'color'
-      };
-      return map[lc]||lc;
+        'layman':'layman','notes':'notes','color':'color'};
+      if(lc.includes("layman")) return 'layman';
+      return m[lc]||lc;
     });
-
-    // Clear existing allocations entirely — sheet is source of truth
     ALLOCS.length=0;
-
-    // Parse rows and build ALLOCS fresh
-    let added=0, skipped=0;
+    let added=0,skipped=0;
     for(let i=1;i<lines.length;i++){
       const cols=parseCSVLine(lines[i]);
       if(!cols.some(c=>c.replace(/"/g,'').trim())) continue;
       const row={};
       headers.forEach((h,idx)=>{row[h]=(cols[idx]||'').replace(/"/g,'').trim();});
-
-      // Must have at minimum: from, to, name
-      if(!row.from||!row.to||!row.name){ skipped++; continue; }
-
-      // Resolve node IDs
+      if(!row.from||!row.to||!row.name){skipped++;continue;}
       const fromId=resolveNode(row.from);
       const toId=resolveNode(row.to);
-      if(!fromId||!toId){
-        console.warn(`Row ${i}: Could not resolve nodes "${row.from}" → "${row.to}" for "${row.name}"`);
-        skipped++;
-        continue;
-      }
-
-      // Build alloc object — ID comes from sheet column A
-      const allocId=row.sheetId||('auto_'+i);
+      if(!fromId||!toId){console.warn('Row '+i+': Cannot resolve "'+row.from+'" to "'+row.to+'"');skipped++;continue;}
       ALLOCS.push({
-        id:allocId,
-        sheetId:allocId,
-        from:fromId,
-        to:toId,
-        name:row.name,
-        fromCond:row.fromCond||'None',
-        toCond:row.toCond||'None',
-        overview:row.overview||'',
-        layman:row.layman||'',
-        notes:row.notes||'',
-        colorOverride:(row.color&&row.color.startsWith('#'))?row.color:null,
-        _pt:1, _pi:0
+        id:row.sheetId||('auto_'+i),sheetId:row.sheetId||('auto_'+i),
+        from:fromId,to:toId,name:row.name,
+        fromCond:row.fromCond||'None',toCond:row.toCond||'None',
+        overview:row.overview||'',layman:row.layman||'',notes:row.notes||'',
+        colorOverride:(row.color&&row.color.startsWith('#'))?row.color:null,_pt:1,_pi:0
       });
       added++;
     }
-
-    if(added===0) throw new Error(`No valid allocations loaded. Check that From/To column values match node names exactly.`);
-
-    // Compute pair groups for spread routing
-    const pairG={};
-    ALLOCS.forEach(a=>{
-      const k=a.from+'→'+a.to;
-      if(!pairG[k]) pairG[k]=[];
-      pairG[k].push(a.id);
-    });
-    ALLOCS.forEach(a=>{
-      a._pt=pairG[a.from+'→'+a.to].length;
-      a._pi=pairG[a.from+'→'+a.to].indexOf(a.id);
-    });
-
-    // Also update badges based on actual counts
-    const inCount={}, outCount={};
-    ALLOCS.forEach(a=>{
-      inCount[a.to]=(inCount[a.to]||0)+1;
-      outCount[a.from]=(outCount[a.from]||0)+1;
-    });
-
-    recomputeAll();
-    render();
-
+    if(added===0) throw new Error('No valid allocations loaded. Check From/To column values match node names.');
+    const pG={};
+    ALLOCS.forEach(a=>{const k=a.from+'->'+a.to;if(!pG[k])pG[k]=[];pG[k].push(a.id);});
+    ALLOCS.forEach(a=>{a._pt=pG[a.from+'->'+a.to].length;a._pi=pG[a.from+'->'+a.to].indexOf(a.id);});
+    recomputeAll();render();
     const ts=new Date().toLocaleTimeString();
-    const msg=`✓ Loaded ${added} allocations from Google Sheets${skipped>0?` (${skipped} rows skipped — check node names)`:''} · ${ts}`;
-    setSyncState('ok',msg);
-    if(selA){ const updated=ALLOCS.find(a=>a.id===selA.id); if(updated)renderAllocPanel(updated); else closePanel(); }
+    setSyncState('ok','Synced '+added+' allocations from Google Sheets'+(skipped?' ('+skipped+' skipped)':'')+' - '+ts);
+    if(selA){const u=ALLOCS.find(a=>a.id===selA.id);if(u)renderAllocPanel(u);else closePanel();}
     if(selN) renderNodePanel(selN);
-
   }catch(err){
-    ALLOCS.length=0;
-    render();
-    setSyncState('error',
-      err.message.includes('Failed to fetch')||err.message.includes('NetworkError')
-        ?'⚠ Cannot reach Google Sheets — check your internet connection and that the sheet is shared publicly'
-        :`⚠ ${err.message}`
-    );
+    ALLOCS.length=0;render();
+    setSyncState('error',err.message.includes('fetch')||err.message.includes('Network')
+      ?'Cannot reach Google Sheets - check internet and sheet sharing settings'
+      :err.message);
   }
 }
-
 
 // Auto-sync on page load
 window.addEventListener('load',()=>{setTimeout(async()=>{await loadLayoutFromSheet();await syncFromSheets();},400);});
@@ -1429,6 +1433,26 @@ function saveModelNotes(){
 }
 
 
+// ── ALLOC NOTES (shared via Google Sheets) ────────────────────
+function saveAllocNote(allocId){
+  const ta=document.getElementById('note-ta-'+allocId);
+  if(!ta) return;
+  const noteText=ta.value.trim();
+  // Update in-memory alloc
+  const a=ALLOCS.find(x=>x.id===allocId);
+  if(a) a.notes=noteText;
+  // Save to NOTES_KEY for persistence between syncs
+  try{
+    const d=localStorage.getItem(NOTES_KEY);
+    const obj=d?JSON.parse(d):{};
+    obj[allocId]=noteText;
+    localStorage.setItem(NOTES_KEY,JSON.stringify(obj));
+  }catch(e){}
+  const msg=document.getElementById('note-saved-'+allocId);
+  if(msg){msg.style.display='inline';setTimeout(()=>msg.style.display='none',2000);}
+  // Re-render any open node panel to reflect note change
+  if(selN) renderNodePanel(selN);
+}
 
 
 // ── LAYOUT SHEET SYNC ─────────────────────────────────────────
@@ -1438,37 +1462,29 @@ const LAYOUT_SHEET_URL='https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02
 
 async function loadLayoutFromSheet(){
   try{
-    const url='https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/gviz/tq?tqx=out:csv&sheet=Layout';
-    const resp=await fetch(url);
-    if(!resp.ok) return;
+    // Try to load Layout sheet
+    const resp=await fetch('https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/export?format=csv&gid=1');
+    if(!resp.ok) return; // Layout sheet may not exist yet
     const text=await resp.text();
     const lines=text.split(/\r?\n/).filter(l=>l.trim());
     if(lines.length<2) return;
-    const headers=parseCSVLine(lines[0]).map(h=>h.toLowerCase().replace(/"/g,'').trim());
+    const headers=parseCSVLine(lines[0]).map(h=>h.toLowerCase().trim());
     const idIdx=headers.indexOf('id');
     const xIdx=headers.indexOf('x');
     const yIdx=headers.indexOf('y');
-    const colIdx=headers.indexOf('color');
     if(idIdx===-1||xIdx===-1||yIdx===-1) return;
-    let applied=0;
     for(let i=1;i<lines.length;i++){
       const cols=parseCSVLine(lines[i]);
       if(!cols.some(c=>c)) continue;
-      const nodeId=(cols[idIdx]||'').replace(/"/g,'').trim();
-      const x=parseFloat((cols[xIdx]||'').replace(/"/g,''));
-      const y=parseFloat((cols[yIdx]||'').replace(/"/g,''));
-      const color=colIdx>=0?(cols[colIdx]||'').replace(/"/g,'').trim():'';
+      const nodeId=cols[idIdx]?.trim();
+      const x=parseFloat(cols[xIdx]);
+      const y=parseFloat(cols[yIdx]);
       const node=N[nodeId];
-      if(node&&!isNaN(x)&&!isNaN(y)){
-        node.x=x; node.y=y;
-        if(color&&color.startsWith('#')) node.colorOverride=color;
-        applied++;
-      }
+      if(node&&!isNaN(x)&&!isNaN(y)){node.x=x;node.y=y;}
     }
-    if(applied>0){ recomputeAll(); console.log(`Layout: ${applied} nodes loaded`); }
-  }catch(e){ console.log('Layout sheet not yet available'); }
+    recomputeAll();
+  }catch(e){}
 }
-
 
 function publishLayout(){
   // Generate CSV content for Layout sheet
@@ -1495,18 +1511,8 @@ function publishLayout(){
   ),100);
 }
 
-
-function showNodeNames(){
-  const names=Object.entries(NODE_NAME_MAP)
-    .filter(([k,v])=>k===k.trim()&&!k.includes('→'))
-    .map(([k,v])=>k.split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' '))
-    .sort();
-  const unique=[...new Set(names)];
-  alert('Valid node names for Google Sheets (From/To columns):\n\n'+unique.join('\n')+
-    '\n\nTip: names are case-insensitive');
-}
-
 document.fonts.ready.then(render);
+window.addEventListener('load',()=>{setTimeout(syncFromSheets,400);});
 </script>
 
 
