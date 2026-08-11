@@ -1369,6 +1369,7 @@ async function syncFromSheets(){
     const rawH=parseCSVLine(lines[0]);
     const headers=rawH.map(h=>{
       const lc=h.toLowerCase().trim().replace(/"/g,'');
+      if(lc.includes('layman')) return 'layman';
       const m={'allocation id':'sheetId','id':'sheetId',
         'from (source object)':'from','from':'from',
         'to (destination object)':'to','to':'to',
@@ -1377,7 +1378,6 @@ async function syncFromSheets(){
         'to conditions':'toCond','tocond':'toCond',
         'allocation overview / strategy / purpose':'overview','overview':'overview',
         'notes':'notes','color':'color'};
-      if(lc.includes('layman')) return 'layman';
       return m[lc]||lc;
     });
 
@@ -1388,42 +1388,54 @@ async function syncFromSheets(){
       if(!cols.some(c=>c.replace(/"/g,'').trim())) continue;
       const row={};
       headers.forEach((h,idx)=>{row[h]=(cols[idx]||'').replace(/"/g,'').trim();});
-      if(row.name||row.from||row.to) sheetRows.push(row);
+      if(row.name&&row.from&&row.to) sheetRows.push(row);
     }
 
-    // UPDATE existing allocs in place (preserves IDs so routing overrides still work)
-    // Match by name+from+to, update fields from sheet
+    // Remove any dynamic allocs from previous syncs
+    for(let i=ALLOCS.length-1;i>=0;i--){
+      if(ALLOCS[i]._dynamic) ALLOCS.splice(i,1);
+    }
+
+    // Track which hardcoded alloc IDs have been matched this sync
+    const matched=new Set();
     let updated=0, added=0, skipped=0;
+
     sheetRows.forEach(row=>{
-      if(!row.from||!row.to||!row.name){skipped++;return;}
       const csvFrom=row.from.trim().toLowerCase();
       const csvTo=row.to.trim().toLowerCase();
       const csvName=row.name.trim().toLowerCase();
 
-      // Find matching existing alloc
+      const fromId=resolveNode(row.from);
+      const toId=resolveNode(row.to);
+      if(!fromId||!toId){skipped++;return;}
+
+      // Match priority:
+      // 1. Previously stored sheetId on alloc
+      // 2. Exact name+from+to match
+      // 3. Any unmatched alloc with same from+to (update it, don't duplicate)
       let alloc=null;
-      // 1. Match by sheet ID if we stored it before
-      if(row.sheetId) alloc=ALLOCS.find(a=>a.sheetId===row.sheetId);
-      // 2. Match by name+from+to
-      if(!alloc) alloc=ALLOCS.find(a=>{
-        const fn=N[a.from]?.lbl.join(' ').toLowerCase()||a.from.toLowerCase();
-        const tn=N[a.to]?.lbl.join(' ').toLowerCase()||a.to.toLowerCase();
-        return fn===csvFrom&&tn===csvTo&&a.name.toLowerCase()===csvName;
-      });
-      // 3. Match by from+to if unique
-      if(!alloc){
-        const fromId=resolveNode(row.from);
-        const toId=resolveNode(row.to);
-        if(fromId&&toId){
-          const cands=ALLOCS.filter(a=>a.from===fromId&&a.to===toId&&!a._dynamic);
-          if(cands.length===1) alloc=cands[0];
-        }
-      }
+
+      // 1. Sheet ID match
+      if(row.sheetId) alloc=ALLOCS.find(a=>a.sheetId===row.sheetId&&!matched.has(a.id));
+
+      // 2. Exact name+from+to
+      if(!alloc) alloc=ALLOCS.find(a=>
+        !matched.has(a.id)&&
+        a.from===fromId&&a.to===toId&&
+        a.name.toLowerCase()===csvName
+      );
+
+      // 3. Any unmatched alloc with same from+to — use it rather than duplicate
+      if(!alloc) alloc=ALLOCS.find(a=>
+        !matched.has(a.id)&&
+        a.from===fromId&&a.to===toId&&
+        !a._dynamic
+      );
 
       if(alloc){
-        // Update fields in place — ID stays the same so overrides work
+        matched.add(alloc.id);
         if(row.sheetId) alloc.sheetId=row.sheetId;
-        if(row.name) alloc.name=row.name;
+        alloc.name=row.name||alloc.name;
         if(row.overview) alloc.overview=row.overview;
         if(row.layman) alloc.layman=row.layman;
         if(row.fromCond) alloc.fromCond=row.fromCond;
@@ -1432,41 +1444,30 @@ async function syncFromSheets(){
         alloc.colorOverride=(row.color&&row.color.startsWith('#'))?row.color:null;
         updated++;
       } else {
-        // Truly new alloc — add it
-        const fromId=resolveNode(row.from);
-        const toId=resolveNode(row.to);
-        if(fromId&&toId){
-          // Only add if not a duplicate of existing from+to+name
-          const exists=ALLOCS.some(a=>a.from===fromId&&a.to===toId&&
-            a.name.toLowerCase()===csvName);
-          if(!exists){
-            ALLOCS.push({
-              id:row.sheetId||('dyn_'+Date.now()+'_'+added),
-              sheetId:row.sheetId,
-              from:fromId,to:toId,name:row.name,
-              fromCond:row.fromCond||'None',toCond:row.toCond||'None',
-              overview:row.overview||'',layman:row.layman||'',notes:row.notes||'',
-              colorOverride:(row.color&&row.color.startsWith('#'))?row.color:null,
-              _pt:1,_pi:0,_dynamic:true
-            });
-            added++;
-          }
-        } else {
-          skipped++;
-        }
+        // Truly new from+to pair not in hardcoded allocs — add dynamically
+        ALLOCS.push({
+          id:row.sheetId||('dyn_'+fromId+'_'+toId+'_'+Date.now()),
+          sheetId:row.sheetId,
+          from:fromId,to:toId,name:row.name,
+          fromCond:row.fromCond||'None',toCond:row.toCond||'None',
+          overview:row.overview||'',layman:row.layman||'',notes:row.notes||'',
+          colorOverride:(row.color&&row.color.startsWith('#'))?row.color:null,
+          _pt:1,_pi:0,_dynamic:true
+        });
+        added++;
       }
     });
 
-    // Recompute pair groups
+    // Recompute pair groups for spread routing
     const pG={};
     ALLOCS.forEach(a=>{const k=a.from+'->'+a.to;if(!pG[k])pG[k]=[];pG[k].push(a.id);});
     ALLOCS.forEach(a=>{a._pt=pG[a.from+'->'+a.to].length;a._pi=pG[a.from+'->'+a.to].indexOf(a.id);});
 
     recomputeAll(); render();
     const ts=new Date().toLocaleTimeString();
-    let msg='✓ Synced from Google Sheets · '+updated+' updated';
+    let msg='✓ Synced '+updated+' allocations from Google Sheets';
     if(added>0) msg+=' · '+added+' new';
-    if(skipped>0) msg+=' · '+skipped+' skipped';
+    if(skipped>0) msg+=' · '+skipped+' skipped (check node names)';
     msg+=' · '+ts;
     setSyncState('ok',msg);
     if(selA){const u=ALLOCS.find(a=>a.id===selA.id);if(u)renderAllocPanel(u);else closePanel();}
@@ -1474,7 +1475,7 @@ async function syncFromSheets(){
 
   }catch(err){
     setSyncState('error',err.message.includes('fetch')||err.message.includes('Network')
-      ?'Cannot reach Google Sheets — check internet and sheet sharing'
+      ?'Cannot reach Google Sheets — check internet and sharing settings'
       :err.message);
   }
 }
