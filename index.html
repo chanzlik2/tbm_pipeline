@@ -1364,55 +1364,121 @@ async function syncFromSheets(){
     const text=await resp.text();
     const lines=text.split(/\r?\n/).filter(l=>l.trim());
     if(lines.length<2) throw new Error('Sheet appears empty');
+
+    // Parse headers
     const rawH=parseCSVLine(lines[0]);
     const headers=rawH.map(h=>{
       const lc=h.toLowerCase().trim().replace(/"/g,'');
-      const m={'allocation id':'sheetId','id':'sheetId','from (source object)':'from','from':'from',
-        'to (destination object)':'to','to':'to','allocation name':'name','name':'name',
-        'from conditions':'fromCond','fromcond':'fromCond','to conditions':'toCond','tocond':'toCond',
+      const m={'allocation id':'sheetId','id':'sheetId',
+        'from (source object)':'from','from':'from',
+        'to (destination object)':'to','to':'to',
+        'allocation name':'name','name':'name',
+        'from conditions':'fromCond','fromcond':'fromCond',
+        'to conditions':'toCond','tocond':'toCond',
         'allocation overview / strategy / purpose':'overview','overview':'overview',
-        'layman':'layman','notes':'notes','color':'color'};
-      if(lc.includes("layman")) return 'layman';
+        'notes':'notes','color':'color'};
+      if(lc.includes('layman')) return 'layman';
       return m[lc]||lc;
     });
-    ALLOCS.length=0;
-    let added=0,skipped=0;
+
+    // Parse sheet rows
+    const sheetRows=[];
     for(let i=1;i<lines.length;i++){
       const cols=parseCSVLine(lines[i]);
       if(!cols.some(c=>c.replace(/"/g,'').trim())) continue;
       const row={};
       headers.forEach((h,idx)=>{row[h]=(cols[idx]||'').replace(/"/g,'').trim();});
-      if(!row.from||!row.to||!row.name){skipped++;continue;}
-      const fromId=resolveNode(row.from);
-      const toId=resolveNode(row.to);
-      if(!fromId||!toId){console.warn('Row '+i+': Cannot resolve "'+row.from+'" to "'+row.to+'"');skipped++;continue;}
-      ALLOCS.push({
-        id:row.sheetId||('auto_'+i),sheetId:row.sheetId||('auto_'+i),
-        from:fromId,to:toId,name:row.name,
-        fromCond:row.fromCond||'None',toCond:row.toCond||'None',
-        overview:row.overview||'',layman:row.layman||'',notes:row.notes||'',
-        colorOverride:(row.color&&row.color.startsWith('#'))?row.color:null,_pt:1,_pi:0
-      });
-      added++;
+      if(row.name||row.from||row.to) sheetRows.push(row);
     }
-    if(added===0) throw new Error('No valid allocations loaded. Check From/To column values match node names.');
+
+    // UPDATE existing allocs in place (preserves IDs so routing overrides still work)
+    // Match by name+from+to, update fields from sheet
+    let updated=0, added=0, skipped=0;
+    sheetRows.forEach(row=>{
+      if(!row.from||!row.to||!row.name){skipped++;return;}
+      const csvFrom=row.from.trim().toLowerCase();
+      const csvTo=row.to.trim().toLowerCase();
+      const csvName=row.name.trim().toLowerCase();
+
+      // Find matching existing alloc
+      let alloc=null;
+      // 1. Match by sheet ID if we stored it before
+      if(row.sheetId) alloc=ALLOCS.find(a=>a.sheetId===row.sheetId);
+      // 2. Match by name+from+to
+      if(!alloc) alloc=ALLOCS.find(a=>{
+        const fn=N[a.from]?.lbl.join(' ').toLowerCase()||a.from.toLowerCase();
+        const tn=N[a.to]?.lbl.join(' ').toLowerCase()||a.to.toLowerCase();
+        return fn===csvFrom&&tn===csvTo&&a.name.toLowerCase()===csvName;
+      });
+      // 3. Match by from+to if unique
+      if(!alloc){
+        const fromId=resolveNode(row.from);
+        const toId=resolveNode(row.to);
+        if(fromId&&toId){
+          const cands=ALLOCS.filter(a=>a.from===fromId&&a.to===toId&&!a._dynamic);
+          if(cands.length===1) alloc=cands[0];
+        }
+      }
+
+      if(alloc){
+        // Update fields in place — ID stays the same so overrides work
+        if(row.sheetId) alloc.sheetId=row.sheetId;
+        if(row.name) alloc.name=row.name;
+        if(row.overview) alloc.overview=row.overview;
+        if(row.layman) alloc.layman=row.layman;
+        if(row.fromCond) alloc.fromCond=row.fromCond;
+        if(row.toCond) alloc.toCond=row.toCond;
+        alloc.notes=row.notes||'';
+        alloc.colorOverride=(row.color&&row.color.startsWith('#'))?row.color:null;
+        updated++;
+      } else {
+        // Truly new alloc — add it
+        const fromId=resolveNode(row.from);
+        const toId=resolveNode(row.to);
+        if(fromId&&toId){
+          // Only add if not a duplicate of existing from+to+name
+          const exists=ALLOCS.some(a=>a.from===fromId&&a.to===toId&&
+            a.name.toLowerCase()===csvName);
+          if(!exists){
+            ALLOCS.push({
+              id:row.sheetId||('dyn_'+Date.now()+'_'+added),
+              sheetId:row.sheetId,
+              from:fromId,to:toId,name:row.name,
+              fromCond:row.fromCond||'None',toCond:row.toCond||'None',
+              overview:row.overview||'',layman:row.layman||'',notes:row.notes||'',
+              colorOverride:(row.color&&row.color.startsWith('#'))?row.color:null,
+              _pt:1,_pi:0,_dynamic:true
+            });
+            added++;
+          }
+        } else {
+          skipped++;
+        }
+      }
+    });
+
+    // Recompute pair groups
     const pG={};
     ALLOCS.forEach(a=>{const k=a.from+'->'+a.to;if(!pG[k])pG[k]=[];pG[k].push(a.id);});
     ALLOCS.forEach(a=>{a._pt=pG[a.from+'->'+a.to].length;a._pi=pG[a.from+'->'+a.to].indexOf(a.id);});
-    recomputeAll();render();
+
+    recomputeAll(); render();
     const ts=new Date().toLocaleTimeString();
-    setSyncState('ok','Synced '+added+' allocations from Google Sheets'+(skipped?' ('+skipped+' skipped)':'')+' - '+ts);
+    let msg='✓ Synced from Google Sheets · '+updated+' updated';
+    if(added>0) msg+=' · '+added+' new';
+    if(skipped>0) msg+=' · '+skipped+' skipped';
+    msg+=' · '+ts;
+    setSyncState('ok',msg);
     if(selA){const u=ALLOCS.find(a=>a.id===selA.id);if(u)renderAllocPanel(u);else closePanel();}
     if(selN) renderNodePanel(selN);
+
   }catch(err){
-    ALLOCS.length=0;render();
     setSyncState('error',err.message.includes('fetch')||err.message.includes('Network')
-      ?'Cannot reach Google Sheets - check internet and sheet sharing settings'
+      ?'Cannot reach Google Sheets — check internet and sheet sharing'
       :err.message);
   }
 }
 
-// Auto-sync on page load
 window.addEventListener('load',()=>{setTimeout(syncFromSheets,400);});
 // loadLayoutFromSheet disabled — enable via Publish Layout when ready
 
