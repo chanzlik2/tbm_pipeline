@@ -1537,28 +1537,38 @@ const LAYOUT_SHEET_URL='https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02
 
 async function loadLayoutFromSheet(){
   try{
-    // Try to load Layout sheet
-    const resp=await fetch('https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/export?format=csv&gid=1');
-    if(!resp.ok) return; // Layout sheet may not exist yet
+    // Layout sheet is the second tab (gid=1 is a guess; Apps Script writes named sheet)
+    // Try fetching by sheet name
+    const url='https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/gviz/tq?tqx=out:csv&sheet=Layout';
+    const resp=await fetch(url);
+    if(!resp.ok) return;
     const text=await resp.text();
     const lines=text.split(/\r?\n/).filter(l=>l.trim());
     if(lines.length<2) return;
-    const headers=parseCSVLine(lines[0]).map(h=>h.toLowerCase().trim());
+    const headers=parseCSVLine(lines[0]).map(h=>h.toLowerCase().replace(/"/g,'').trim());
     const idIdx=headers.indexOf('id');
     const xIdx=headers.indexOf('x');
     const yIdx=headers.indexOf('y');
     if(idIdx===-1||xIdx===-1||yIdx===-1) return;
+    
+    let applied=0;
     for(let i=1;i<lines.length;i++){
       const cols=parseCSVLine(lines[i]);
       if(!cols.some(c=>c)) continue;
-      const nodeId=cols[idIdx]?.trim();
-      const x=parseFloat(cols[xIdx]);
-      const y=parseFloat(cols[yIdx]);
+      const nodeId=(cols[idIdx]||'').replace(/"/g,'').trim();
+      const x=parseFloat((cols[xIdx]||'').replace(/"/g,''));
+      const y=parseFloat((cols[yIdx]||'').replace(/"/g,''));
       const node=N[nodeId];
-      if(node&&!isNaN(x)&&!isNaN(y)){node.x=x;node.y=y;}
+      if(node&&!isNaN(x)&&!isNaN(y)){node.x=x;node.y=y;applied++;}
     }
-    recomputeAll();
-  }catch(e){}
+    
+    if(applied>0){
+      recomputeAll();
+      console.log(`Layout loaded: ${applied} nodes positioned from Google Sheets`);
+    }
+  }catch(e){
+    console.log('Layout sheet not found yet — using default positions');
+  }
 }
 
 function publishLayout(){
