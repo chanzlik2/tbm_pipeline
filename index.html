@@ -1044,6 +1044,32 @@ function renderAllocPanel(a, _unused){
 }
 
 
+function updateNodeBadges(){
+  // Recount in/out allocations per node and update badge
+  const inCount={}, outCount={};
+  ALLOCS.forEach(a=>{
+    inCount[a.to]=(inCount[a.to]||0)+1;
+    outCount[a.from]=(outCount[a.from]||0)+1;
+  });
+  NODES.forEach(n=>{
+    const i=inCount[n.id]||0;
+    const o=outCount[n.id]||0;
+    if(i===0&&o===0) return; // opex nodes etc - no badge
+    // Keep original badge format but update numbers
+    if(n.badge) n.badge=i+':'+o;
+  });
+}
+
+function toggleAccordion(bodyId, rowEl){
+  const body=document.getElementById(bodyId);
+  const chevId=bodyId.replace('acc-','chev-');
+  const chev=document.getElementById(chevId);
+  if(!body) return;
+  const isOpen=body.classList.contains('open');
+  body.classList.toggle('open',!isOpen);
+  if(chev) chev.classList.toggle('open',!isOpen);
+}
+
 function openAllocPanel(a){
   selA=a; selN=null;
   renderAllocPanel(a);
@@ -1499,6 +1525,7 @@ async function syncFromSheets(){
     ALLOCS.forEach(a=>{a._pt=pG[a.from+'->'+a.to].length;a._pi=pG[a.from+'->'+a.to].indexOf(a.id);});
 
     recomputeAll();
+    updateNodeBadges();
     render();
 
     const ts=new Date().toLocaleTimeString();
