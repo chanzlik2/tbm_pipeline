@@ -1356,30 +1356,35 @@ function resolveNode(name){
   if(!name) return null;
   return NODE_NAME_MAP[name.trim().toLowerCase()]||null;
 }
+
+// ── LEARNED SHEET ID MAPPING ──────────────────────────────────
+// Stores sheet IDs learned from first-time matching
+// Persists in localStorage so no re-mapping needed on refresh
+const LEARNED_MAP_KEY='rj_learned_sheet_ids_v1';
+let learnedMap={};
+try{const d=localStorage.getItem(LEARNED_MAP_KEY);if(d)learnedMap=JSON.parse(d);}catch(e){}
+function saveLearnedMap(){try{localStorage.setItem(LEARNED_MAP_KEY,JSON.stringify(learnedMap));}catch(e){}}
+
 async function syncFromSheets(){
   setSyncState('loading','Loading from Google Sheets...');
   try{
-    // Fetch with 10-second timeout
+    // Fetch with 10s timeout
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),10000);
     let resp;
     try{
-      resp=await fetch('https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/gviz/tq?tqx=out:csv&sheet=RJ+TBM+Allocation+Rules+-+ALL',
-        {signal:controller.signal});
-    }catch(fetchErr){
+      resp=await fetch('https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/gviz/tq?tqx=out:csv&sheet=RJ+TBM+Allocation+Rules+-+ALL',{signal:controller.signal});
+    }catch(fe){
       clearTimeout(timer);
-      if(fetchErr.name==='AbortError') throw new Error('Request timed out — Google Sheets is not responding. Check your internet connection.');
-      throw fetchErr;
+      if(fe.name==='AbortError') throw new Error('Timed out — Google Sheets not responding');
+      throw fe;
     }
     clearTimeout(timer);
     if(!resp.ok) throw new Error('HTTP '+resp.status);
+
     const text=await resp.text();
     const lines=text.split(/\r?\n/).filter(l=>l.trim());
     if(lines.length<2) throw new Error('Sheet appears empty');
-
-    // Sheet ID → internal HTML alloc ID mapping
-    // Built from your exact column A IDs
-    const SHEET_MAP={"CS1": "cs_labor", "CS2": "cs_cons_labor", "CS3": "cs_vendors_nl", "CS4": "cs_fa_amort", "CS5": "cs_fa_no_amort", "CS6": "cs_market_data", "CS7": "cs_overhead", "CS8": "cs_projects", "FA1": "fal_itrt", "LAB1": "labor_tt_int", "LAB2": "labor_tt_ext", "LAB3": "labor_ext_no_tt", "LAB4": "labor_exec", "LAB5": "labor_fallout", "VEN1": "vend_ext_labor", "VEN2": "vend_apps_itrt", "VEN3": "vend_itrt", "VEN4": "vend_mktdata", "VEN5": "vend_csp", "PROJ1": "proj_apps", "PROJ2": "proj_biz", "PROJ3": "proj_tick", "PROJ4": "proj_db_excl", "PROJ5": "proj_devops", "PROJ6": "proj_app_svcs", "PROJ7": "proj_phys", "PROJ8": "proj_db_ns", "PROJ9": "proj_dc", "PROJ10": "proj_eud", "OCP1": "ocp_itrt", "OCP2": "ocp_dc_itrt", "TT1": "tt_itrt", "CSP1": "csp_aws", "CSP2": "csp_google", "ND1": "nd_biz", "ND2": "nd_dc", "ND3": "nd_eud", "ND4": "nd_storage", "DB1": "db_sql", "DB2": "db_nonstop", "DB3": "db_oracle", "DB4": "db_enterprise", "DB5": "db_mongo", "DB6": "db_exadata", "PHYS1": "ps_hyp", "PHYS2": "ps_srv", "PHYS3": "ps_nonstop", "ST1": "stor_srv", "CPCD1": "cpds_cs", "DC1": "dc_rack", "EUD1": "eud_biz", "SDEV1": "sd_stor", "SERV1": "srv_app", "SERV2": "srv_nonstop", "SERV3": "srv_exadata", "SERV4": "srv_db_ent", "SERV5": "srv_fallout", "HYP1": "hyp_vms_h", "HYP2": "hyp_vms_nh", "HYP3": "hyp_fallout", "CLOS1": "cs_acds_c", "TICK1": "tick_apps", "TICK2": "tick_srv", "RJDC1": "rack_phys", "RJDC2": "rack_srv_net", "RJDC3": "rack_stor", "APCD1": "acds_apps", "APP1": "apps_biz", "BS1": "bs_hc_all", "BS2": "bs_100pct", "BS3": "bs_fa_pcg", "BS4": "bs_css", "BS5": "bs_cob", "BS6": "bs_client_access", "BS7": "bs_adv_search", "BS8": "bs_opp_es", "BS9": "bs_trades_all", "BS10": "bs_ada", "BS11": "bs_client_ctr", "BS12": "bs_client_rep", "BS13": "bs_apptio", "BS14": "bs_sec_mov", "BS15": "bs_notif", "BS16": "bs_tableau", "BS17": "bs_wealth", "BS18": "bs_csp_data", "BS19": "bs_hc_scl", "BS20": "bs_esign", "BS21": "bs_smart", "BS22": "bs_trades_pcg", "BS23": "bs_hyperion", "BS24": "bs_morning", "BS25": "bs_gpm", "BS26": "bs_hc_reg", "BS27": "bs_money_mov", "BS28": "bs_50split", "RJTTS1": "rjtow_biz", "ITRT1": "itrt_towers_proj_labor", "ITRT2": "itrt_itmnt_sub_app", "ITRT3": "itrt_proj_remaining", "ITRT4": "itrt_amort_fa", "ITRT5": "itrt_direct_svc_new", "ITRT6": "itrt_mktdata_svc", "ITRT7": "itrt_towers_proj_fa", "ITRT8": "itrt_db_service", "ITRT9": "itrt_ocp_alloc", "ITRT10": "itrt_cloud_cpds", "ITRT11": "itrt_network", "ITRT12": "itrt_servers_phys", "ITRT13": "itrt_itmnt_svc", "ITRT14": "itrt_db_vendor", "ITRT15": "itrt_storage"};
 
     // Parse headers
     const rawH=parseCSVLine(lines[0]);
@@ -1397,12 +1402,16 @@ async function syncFromSheets(){
       return m[lc]||lc;
     });
 
-    // Remove any previous dynamic allocs
+    // Hard-coded sheet ID → internal ID map (for original 112 allocs)
+    const SHEET_MAP={"CS1": "cs_labor", "CS2": "cs_cons_labor", "CS3": "cs_vendors_nl", "CS4": "cs_fa_amort", "CS5": "cs_fa_no_amort", "CS6": "cs_market_data", "CS7": "cs_overhead", "CS8": "cs_projects", "FA1": "fal_itrt", "LAB1": "labor_tt_int", "LAB2": "labor_tt_ext", "LAB3": "labor_ext_no_tt", "LAB4": "labor_exec", "LAB5": "labor_fallout", "VEN1": "vend_ext_labor", "VEN2": "vend_apps_itrt", "VEN3": "vend_itrt", "VEN4": "vend_mktdata", "VEN5": "vend_csp", "PROJ1": "proj_apps", "PROJ2": "proj_biz", "PROJ3": "proj_tick", "PROJ4": "proj_db_excl", "PROJ5": "proj_devops", "PROJ6": "proj_app_svcs", "PROJ7": "proj_phys", "PROJ8": "proj_db_ns", "PROJ9": "proj_dc", "PROJ10": "proj_eud", "OCP1": "ocp_itrt", "OCP2": "ocp_dc_itrt", "TT1": "tt_itrt", "CSP1": "csp_aws", "CSP2": "csp_google", "ND1": "nd_biz", "ND2": "nd_dc", "ND3": "nd_eud", "ND4": "nd_storage", "DB1": "db_sql", "DB2": "db_nonstop", "DB3": "db_oracle", "DB4": "db_enterprise", "DB5": "db_mongo", "DB6": "db_exadata", "PHYS1": "ps_hyp", "PHYS2": "ps_srv", "PHYS3": "ps_nonstop", "ST1": "stor_srv", "CPCD1": "cpds_cs", "DC1": "dc_rack", "EUD1": "eud_biz", "SDEV1": "sd_stor", "SERV1": "srv_app", "SERV2": "srv_nonstop", "SERV3": "srv_exadata", "SERV4": "srv_db_ent", "SERV5": "srv_fallout", "HYP1": "hyp_vms_h", "HYP2": "hyp_vms_nh", "HYP3": "hyp_fallout", "CLOS1": "cs_acds_c", "TICK1": "tick_apps", "TICK2": "tick_srv", "RJDC1": "rack_phys", "RJDC2": "rack_srv_net", "RJDC3": "rack_stor", "APCD1": "acds_apps", "APP1": "apps_biz", "BS1": "bs_hc_all", "BS2": "bs_100pct", "BS3": "bs_fa_pcg", "BS4": "bs_css", "BS5": "bs_cob", "BS6": "bs_client_access", "BS7": "bs_adv_search", "BS8": "bs_opp_es", "BS9": "bs_trades_all", "BS10": "bs_ada", "BS11": "bs_client_ctr", "BS12": "bs_client_rep", "BS13": "bs_apptio", "BS14": "bs_sec_mov", "BS15": "bs_notif", "BS16": "bs_tableau", "BS17": "bs_wealth", "BS18": "bs_csp_data", "BS19": "bs_hc_scl", "BS20": "bs_esign", "BS21": "bs_smart", "BS22": "bs_trades_pcg", "BS23": "bs_hyperion", "BS24": "bs_morning", "BS25": "bs_gpm", "BS26": "bs_hc_reg", "BS27": "bs_money_mov", "BS28": "bs_50split", "RJTTS1": "rjtow_biz", "ITRT1": "itrt_towers_proj_labor", "ITRT2": "itrt_itmnt_sub_app", "ITRT3": "itrt_proj_remaining", "ITRT4": "itrt_amort_fa", "ITRT5": "itrt_direct_svc_new", "ITRT6": "itrt_mktdata_svc", "ITRT7": "itrt_towers_proj_fa", "ITRT8": "itrt_db_service", "ITRT9": "itrt_ocp_alloc", "ITRT10": "itrt_cloud_cpds", "ITRT11": "itrt_network", "ITRT12": "itrt_servers_phys", "ITRT13": "itrt_itmnt_svc", "ITRT14": "itrt_db_vendor", "ITRT15": "itrt_storage"};
+
+    // Remove previous dynamic allocs
     for(let i=ALLOCS.length-1;i>=0;i--){
       if(ALLOCS[i]._dynamic) ALLOCS.splice(i,1);
     }
 
-    let updated=0, added=0, skipped=0;
+    let updated=0,added=0,skipped=0;
+    let learnedNew=false;
 
     for(let i=1;i<lines.length;i++){
       const cols=parseCSVLine(lines[i]);
@@ -1411,44 +1420,62 @@ async function syncFromSheets(){
       headers.forEach((h,idx)=>{row[h]=(cols[idx]||'').replace(/"/g,'').trim();});
       if(!row.name&&!row.sheetId){skipped++;continue;}
 
-      // PRIMARY MATCH: use sheet ID → internal ID mapping
-      const internalId=row.sheetId?SHEET_MAP[row.sheetId]:null;
-      let alloc=internalId?ALLOCS.find(a=>a.id===internalId):null;
+      let alloc=null;
 
-      // FALLBACK: name+from+to match for any new allocs not in map
+      // 1. Hard-coded map (original 112 allocs — instant, guaranteed)
+      if(row.sheetId&&SHEET_MAP[row.sheetId]){
+        alloc=ALLOCS.find(a=>a.id===SHEET_MAP[row.sheetId]);
+      }
+
+      // 2. Learned map (new allocs matched previously — also instant)
+      if(!alloc&&row.sheetId&&learnedMap[row.sheetId]){
+        alloc=ALLOCS.find(a=>a.id===learnedMap[row.sheetId]);
+      }
+
+      // 3. Name + from + to matching (for brand new allocs, first time only)
       if(!alloc&&row.from&&row.to&&row.name){
         const fromId=resolveNode(row.from);
         const toId=resolveNode(row.to);
-        if(!fromId||!toId){
-          console.warn('New alloc "'+row.name+'" — could not resolve nodes: from="'+row.from+'" ('+fromId+') to="'+row.to+'" ('+toId+')');
-          skipped++;
-          return;
-        }
         if(fromId&&toId){
+          // Try exact name match first
           alloc=ALLOCS.find(a=>
             a.from===fromId&&a.to===toId&&
-            a.name.toLowerCase()===row.name.trim().toLowerCase()
+            a.name.toLowerCase()===row.name.trim().toLowerCase()&&
+            !a._dynamic
           );
           if(!alloc){
-            // Truly new — add dynamically
-            console.log('Adding new dynamic alloc: "'+row.name+'" from '+fromId+' to '+toId);
-            ALLOCS.push({
-              id:row.sheetId||('dyn_'+i),sheetId:row.sheetId,
+            // New allocation — add dynamically
+            const newId=row.sheetId||('dyn_'+fromId+'_'+toId+'_'+i);
+            const newAlloc={
+              id:newId,sheetId:row.sheetId,
               from:fromId,to:toId,name:row.name,
               fromCond:row.fromCond||'None',toCond:row.toCond||'None',
               overview:row.overview||'',layman:row.layman||'',
               notes:row.notes||'',
               colorOverride:(row.color&&row.color.startsWith('#'))?row.color:null,
               _pt:1,_pi:0,_dynamic:true
-            });
+            };
+            ALLOCS.push(newAlloc);
+            // Learn this mapping for next time
+            if(row.sheetId){
+              learnedMap[row.sheetId]=newId;
+              learnedNew=true;
+            }
             added++;
-            return;
+            continue;
           }
+          // Learned this match — store it for next time
+          if(alloc&&row.sheetId&&!learnedMap[row.sheetId]){
+            learnedMap[row.sheetId]=alloc.id;
+            learnedNew=true;
+          }
+        } else {
+          skipped++;continue;
         }
       }
 
       if(alloc){
-        // Update fields — ID never changes so routing overrides stay intact
+        // Update fields in place — ID never changes
         if(row.sheetId) alloc.sheetId=row.sheetId;
         if(row.name) alloc.name=row.name;
         if(row.overview) alloc.overview=row.overview;
@@ -1463,25 +1490,33 @@ async function syncFromSheets(){
       }
     }
 
-    // Recompute pair groups
+    // Save any newly learned mappings
+    if(learnedNew) saveLearnedMap();
+
+    // Recompute routing
     const pG={};
     ALLOCS.forEach(a=>{const k=a.from+'->'+a.to;if(!pG[k])pG[k]=[];pG[k].push(a.id);});
     ALLOCS.forEach(a=>{a._pt=pG[a.from+'->'+a.to].length;a._pi=pG[a.from+'->'+a.to].indexOf(a.id);});
 
-    recomputeAll(); render();
+    recomputeAll();
+    render();
+
     const ts=new Date().toLocaleTimeString();
-    let msg='✓ Synced '+updated+' allocations from Google Sheets';
-    if(added>0) msg+=' · '+added+' new arrow'+(added>1?'s':'');
+    let msg='✓ Synced '+updated+' allocations';
+    if(added>0) msg+=' · '+added+' new';
     if(skipped>0) msg+=' · '+skipped+' skipped';
     msg+=' · '+ts;
     setSyncState('ok',msg);
+
     if(selA){const u=ALLOCS.find(a=>a.id===selA.id);if(u)renderAllocPanel(u);else closePanel();}
     if(selN) renderNodePanel(selN);
 
   }catch(err){
-    setSyncState('error',err.message.includes('fetch')||err.message.includes('Network')
-      ?'Cannot reach Google Sheets — check internet and sheet sharing settings'
-      :err.message);
+    setSyncState('error',
+      err.message.includes('Timed out')||err.message.includes('fetch')||err.message.includes('Network')
+        ?'⚠ Cannot reach Google Sheets — check internet connection'
+        :'⚠ '+err.message
+    );
   }
 }
 
