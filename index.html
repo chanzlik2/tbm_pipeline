@@ -1413,7 +1413,8 @@ async function syncFromSheets(){
 }
 
 // Auto-sync on page load
-window.addEventListener('load',()=>{setTimeout(async()=>{await loadLayoutFromSheet();await syncFromSheets();},400);});
+window.addEventListener('load',()=>{setTimeout(syncFromSheets,400);});
+// loadLayoutFromSheet disabled — enable via Publish Layout when ready
 
 
 // ── PRIVATE MODEL NOTES (browser only) ───────────────────────
