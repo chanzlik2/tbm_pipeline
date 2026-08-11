@@ -335,16 +335,152 @@ loadRouteOverrides();
 
 const LS_KEY='rj_pipeline_layout_v1';
 
+// Your custom layout positions (baked in from snapshot 2026-08-11)
+const BAKED_LAYOUT = {
+  "acds": {
+    "x": 463,
+    "y": 408
+  },
+  "applications": {
+    "x": 474,
+    "y": 341
+  },
+  "biz_svcs": {
+    "x": 460,
+    "y": 210
+  },
+  "cloud_sp": {
+    "x": 887,
+    "y": 1158
+  },
+  "cloud_svcs": {
+    "x": 289,
+    "y": 738
+  },
+  "consumption": {
+    "x": 490,
+    "y": 40
+  },
+  "cost_source": {
+    "x": 450,
+    "y": 1430
+  },
+  "cpds": {
+    "x": 285,
+    "y": 827
+  },
+  "data_centers": {
+    "x": 1027,
+    "y": 769
+  },
+  "databases": {
+    "x": 441,
+    "y": 831
+  },
+  "eud": {
+    "x": 880,
+    "y": 770
+  },
+  "fa_amort_obj": {
+    "x": 160,
+    "y": 829
+  },
+  "fixed_asset_ledger": {
+    "x": 327,
+    "y": 1242
+  },
+  "hypervisor": {
+    "x": 604,
+    "y": 636
+  },
+  "itrt": {
+    "x": 109,
+    "y": 1034
+  },
+  "labor": {
+    "x": 496,
+    "y": 1249
+  },
+  "network_devices": {
+    "x": 842,
+    "y": 852
+  },
+  "opex_fixed": {
+    "x": 413,
+    "y": 1517
+  },
+  "opex_var": {
+    "x": 570,
+    "y": 1516
+  },
+  "other_cost_pools": {
+    "x": 182,
+    "y": 1242
+  },
+  "phys_server": {
+    "x": 534,
+    "y": 704
+  },
+  "projects": {
+    "x": 1058,
+    "y": 936
+  },
+  "rj_dc_rack": {
+    "x": 1009,
+    "y": 700
+  },
+  "rj_tower_svc": {
+    "x": 734,
+    "y": 174
+  },
+  "servers": {
+    "x": 460,
+    "y": 537
+  },
+  "storage": {
+    "x": 742,
+    "y": 634
+  },
+  "storage_devices": {
+    "x": 735,
+    "y": 747
+  },
+  "tickets": {
+    "x": 1178,
+    "y": 809
+  },
+  "time_tracking": {
+    "x": 484,
+    "y": 1137
+  },
+  "vendors": {
+    "x": 742,
+    "y": 1249
+  }
+};
+
 function loadLayout(){
   try{
     const saved=localStorage.getItem(LS_KEY);
     if(saved){
       const positions=JSON.parse(saved);
+      // Use saved positions if they exist
       NODE_DEFAULTS.forEach(n=>{
         if(positions[n.id]){n.x=positions[n.id].x;n.y=positions[n.id].y;}
+        else if(BAKED_LAYOUT[n.id]){n.x=BAKED_LAYOUT[n.id].x;n.y=BAKED_LAYOUT[n.id].y;}
+      });
+    } else {
+      // No localStorage — use baked layout
+      NODE_DEFAULTS.forEach(n=>{
+        if(BAKED_LAYOUT[n.id]){n.x=BAKED_LAYOUT[n.id].x;n.y=BAKED_LAYOUT[n.id].y;}
       });
     }
-  }catch(e){}
+  }catch(e){
+    // Fallback to baked layout on any error
+    NODE_DEFAULTS.forEach(n=>{
+      if(BAKED_LAYOUT[n.id]){n.x=BAKED_LAYOUT[n.id].x;n.y=BAKED_LAYOUT[n.id].y;}
+    });
+  }
 }
 loadLayout(); (function(){const _pos={"consumption":{"x":490,"y":40},"biz_svcs":{"x":460,"y":210},"rj_tower_svc":{"x":734,"y":174},"applications":{"x":474,"y":341},"acds":{"x":463,"y":408},"cloud_svcs":{"x":289,"y":738},"servers":{"x":460,"y":537},"hypervisor":{"x":604,"y":636},"phys_server":{"x":534,"y":704},"storage":{"x":742,"y":634},"storage_devices":{"x":735,"y":747},"databases":{"x":441,"y":831},"cpds":{"x":285,"y":827},"fa_amort_obj":{"x":160,"y":829},"tickets":{"x":1178,"y":809},"eud":{"x":880,"y":770},"data_centers":{"x":1027,"y":769},"network_devices":{"x":842,"y":852},"projects":{"x":1058,"y":936},"rj_dc_rack":{"x":1009,"y":700},"itrt":{"x":109,"y":1034},"time_tracking":{"x":484,"y":1137},"labor":{"x":496,"y":1249},"vendors":{"x":742,"y":1249},"fixed_asset_ledger":{"x":327,"y":1242},"other_cost_pools":{"x":182,"y":1242},"cloud_sp":{"x":887,"y":1158},"cost_source":{"x":450,"y":1430},"opex_fixed":{"x":413,"y":1517},"opex_var":{"x":570,"y":1516}};NODE_DEFAULTS.forEach(n=>{if(_pos[n.id]){n.x=_pos[n.id].x;n.y=_pos[n.id].y;}});})();
 
