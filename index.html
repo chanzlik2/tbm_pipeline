@@ -1359,7 +1359,19 @@ function resolveNode(name){
 async function syncFromSheets(){
   setSyncState('loading','Loading from Google Sheets...');
   try{
-    const resp=await fetch('https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/export?format=csv&gid=0');
+    // Fetch with 10-second timeout
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),10000);
+    let resp;
+    try{
+      resp=await fetch('https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/export?format=csv&gid=0',
+        {signal:controller.signal});
+    }catch(fetchErr){
+      clearTimeout(timer);
+      if(fetchErr.name==='AbortError') throw new Error('Request timed out — Google Sheets is not responding. Check your internet connection.');
+      throw fetchErr;
+    }
+    clearTimeout(timer);
     if(!resp.ok) throw new Error('HTTP '+resp.status);
     const text=await resp.text();
     const lines=text.split(/\r?\n/).filter(l=>l.trim());
