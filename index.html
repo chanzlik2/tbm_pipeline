@@ -168,17 +168,15 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f8f5f0;color:#1e293b;ov
     <button class="tbtn-sm" onclick="exportFullSnapshot()" style="margin-left:8px">📤 Export Snapshot</button>
     <span id="edit-indicator">● Edit mode — drag nodes, line elbows, or endpoint dots</span>
     <button class="tbtn-sm" id="btn-save" onclick="saveLayout()" style="display:none">💾 Save Layout</button>
-    <button class="tbtn-sm" id="btn-reset" onclick="resetLayout()" style="display:none">↺ Reset Nodes</button>
-    <button class="tbtn-sm" id="btn-reset-lines" onclick="resetLines()" style="display:none">↺ Reset Lines</button>
-    <button class="tbtn-sm" id="btn-reset-eps" onclick="resetEndpoints()" style="display:none">↺ Reset Endpoints</button>
     <button class="tbtn-sm" onclick="exportLayout()" style="display:none" id="btn-export">⬇ Export Layout JSON</button>
     <button class="tbtn-sm" onclick="exportFullSnapshot()" style="display:none;margin-left:0" id="btn-snapshot">📤 Export Full Snapshot</button>
     <label class="tbtn-sm" style="display:none;cursor:pointer" id="btn-import-lbl">⬆ Import JSON<input type="file" accept=".json" style="display:none" onchange="importLayout(event)"></label>
   </div>
   <div id="sync-bar" class="loading">
     <span class="sync-dot loading" id="sync-dot"></span>
-    <span id="sync-text">Connecting to Google Sheets...</span>
+    <span id="sync-text">Loading from Google Sheets...</span>
     <button class="sync-refresh-btn" id="sync-btn" onclick="syncFromSheets()">↺ Sync now</button>
+    <button class="sync-refresh-btn" onclick="showNodeNames()" style="margin-left:4px" title="Show valid node names for Google Sheet">? Node names</button>
   </div>
   <div id="main">
     <div id="canvas-wrap"><canvas id="c" width="2275" height="2905" style="width: 1300px; height: 1660px; cursor: default;"></canvas></div>
@@ -202,7 +200,7 @@ const NODE_DEFAULTS=[
    desc:'The final destination of all IT costs. Consumption Source represents business unit consumers — departments and groups that ultimately "consume" IT services. Costs arrive from Business Services via 28 different usage-based allocation rules.'},
   {id:'biz_svcs',     lbl:['Business Services'],        x:460,y:210, w:200,h:40,col:'#92400e',badge:'10:28',
    desc:'Represents IT-enabled services delivered to the business. Costs flow in from Applications, Projects, End User Devices, Network Devices, and IT Resource Towers, then out to Consumption Source by usage metrics.'},
-  {id:'rj_tower_svc', lbl:['RJ Tower→Service','Mapping Transform'],x:690,y:202,w:155,h:46,col:'#7f1d1d',badge:'0:1',
+  {id:'rj_tower_svc', lbl:['RJ Tower to Service','Mapping Transform'],x:690,y:202,w:155,h:46,col:'#7f1d1d',badge:'0:1',
    desc:'A reference transform table mapping IT Resource Towers directly to Business Services. Used for tower costs with a defined service mapping that bypass the application layer entirely.'},
   {id:'applications', lbl:['Applications'],             x:460,y:340, w:170,h:40,col:'#1e3a8a',badge:'1:1',
    desc:'Holds fully-loaded cost assigned to each application. Costs arrive from the Application Cost Driver Stage and flow out to Business Services where a service offering linkage exists.'},
@@ -236,7 +234,7 @@ const NODE_DEFAULTS=[
    desc:'Holds network device costs. Routes to Business Services (Data Network), Data Centers (DC locations), End User Devices, and Storage Devices.'},
   {id:'projects',     lbl:['Projects'],                 x:1030,y:630,w:130,h:40,col:'#14532d',badge:'4:10',
    desc:'Holds IT project spend. Routes to Applications, Business Services, Tickets, Databases, DevOps/App Services (ACDS), Physical Servers, Data Centers, and End User Devices.'},
-  {id:'rj_dc_rack',   lbl:['RJ DC Rack','Usage Consol.'],x:960,y:820,w:130,h:46,col:'#1e3050',badge:'1:3',
+  {id:'rj_dc_rack',   lbl:['RJ Data Center Rack','Usage Consolidation'],x:960,y:820,w:130,h:46,col:'#1e3050',badge:'1:3',
    desc:'RJ Data Center Rack Usage Consolidation. Receives from Data Centers weighted by rack count. Routes to Physical Server (compute), Servers (network/security), and Storage.'},
   {id:'itrt',         lbl:['IT Resource Towers'],       x:110,y:980, w:980,h:50,col:'#065f46',badge:'11:15',
    desc:'The central hub of the RJ TBM cost model. All upstream costs flow in through 15 inbound rules and redistribute through 15 outbound rules to Applications, Business Services, and Projects layers.'},
@@ -265,185 +263,10 @@ const NODE_DEFAULTS=[
 // ═══════════════════════════════════════════
 // ALLOCATIONS
 // ═══════════════════════════════════════════
-const ALLOCS=[
-  {id:'cs_labor',from:'cost_source',to:'labor',name:'Labor',fromCond:"Cost Pool = 'Internal Labor' AND Vendor Name Is Null",toCond:"Labor Metadata 1 = 'Actual'",overview:'Routes internal labor costs from Cost Source to the Labor table, weighted by headcount, matched on Cost Center and Cost Pool.',layman:'Internal employee labor costs are pushed into the Labor pool and spread based on how many headcount each cost center/pool has — so bigger teams absorb more cost.'},
-  {id:'cs_cons_labor',from:'cost_source',to:'vendors',name:'Consulting Labor',fromCond:"Cost Pool = 'External Labor'",toCond:"Source Table = 'Cost Source Vendor Transform'",overview:'Routes external labor costs from Cost Source to Vendors, distributed evenly.',layman:'Contractor and consulting spend is sent to the Vendor layer and split evenly across matching vendor/project combinations.'},
-  {id:'cs_vendors_nl',from:'cost_source',to:'vendors',name:'Vendors (non-labor)',fromCond:"Is Depr = 'No' AND Is Vendor = 'Yes' AND Is Labor = 'No' AND Cost Pool != 'Market Data'",toCond:"Source Table = 'Cost Source Vendor Transform'",overview:'Routes non-labor, non-depreciation vendor costs to the Vendors table, weighted by Weighting metric.',layman:'Non-labor vendor spend flows to the Vendor layer and is distributed proportionally based on pre-defined weighting.'},
-  {id:'cs_fa_amort',from:'cost_source',to:'fixed_asset_ledger',name:'FA - Amort',fromCond:"Is Depr = 'Yes' AND Account = '705800'",toCond:"Profile ID In ('SOFTWARE','PCSOFTWARE')",overview:'Routes software amortization costs (account 705800) to the Fixed Asset Ledger, weighted by Depreciation Amount.',layman:'Software amortization charges are matched to their fixed asset records and spread by depreciation amount.'},
-  {id:'cs_fa_no_amort',from:'cost_source',to:'fixed_asset_ledger',name:'FA - no Amort',fromCond:"Is Depr = 'Yes' AND Account != '705800'",toCond:"Profile ID Not In ('SOFTWARE','PCSOFTWARE')",overview:'Routes non-software depreciation costs to the Fixed Asset Ledger, weighted by Depreciation Amount.',layman:'Hardware and non-software depreciation is matched to fixed asset records and distributed by depreciation amount.'},
-  {id:'cs_market_data',from:'cost_source',to:'vendors',name:'Market Data',fromCond:"Cost Pool = 'Market Data'",toCond:'None',overview:'Routes Market Data costs to the Vendors table, distributed evenly.',layman:'Market data subscription costs are passed to vendors and split evenly across matching service categories.'},
-  {id:'cs_overhead',from:'cost_source',to:'other_cost_pools',name:'Overhead (remainder)',fromCond:'Remainder only — costs not consumed by prior rules',toCond:'None',overview:'Sends remaining Cost Source amounts to Other Cost Pools, weighted by % Allocated.',layman:'Anything left over after all other rules run is treated as overhead and redistributed based on pre-set allocation percentages.'},
-  {id:'cs_projects',from:'cost_source',to:'projects',name:'Projects (remainder)',fromCond:"Is Project = 'Yes' AND Vendor Name Is Null AND Is Depr = 'No' AND Is Labor = 'No'",toCond:"Spend Metric = 'Hardware/Software'",overview:'Routes project-tagged, non-labor, non-vendor, non-depreciation costs to Projects.',layman:"Project spend on hardware/software that isn\'t labor or vendor-linked gets pushed to projects and distributed by weighting."},
-  {id:'fal_itrt',from:'fixed_asset_ledger',to:'itrt',name:'Assets to Towers',fromCond:'None',toCond:"Source Table = 'RJ Fixed Assets Resource Towers'",overview:'Allocates all Fixed Asset Ledger costs to IT Resource Towers, weighted by Depreciation Amount.',layman:"Fixed asset depreciation is pushed into the IT tower layer and spread based on each asset's depreciation amount."},
-  {id:'labor_tt_int',from:'labor',to:'time_tracking',name:'Time Tracking - Internal Labor',fromCond:"Employee Type = 'Internal Labor' AND Check for TT Is NOT Null",toCond:"Employee Type = 'Internal Labor'",overview:'Routes internal labor costs with TT data to Time Tracking, weighted by Actual Hours.',layman:'For employees who log their time, labor costs are allocated based on actual hours worked.'},
-  {id:'labor_tt_ext',from:'labor',to:'time_tracking',name:'Time Tracking - External Labor',fromCond:"Cost Pool = 'External Labor'",toCond:"Employee Type = 'External Labor'",overview:'Routes external labor costs to Time Tracking, weighted by Actual Hours.',layman:'Contractor time charges are allocated based on actual hours logged.'},
-  {id:'labor_ext_no_tt',from:'labor',to:'itrt',name:'External Labor Vendors (No TT)',fromCond:"Labor ID Is Null AND Vendor Name Is NOT Null AND Check for TT 2 Is Null AND Cost Pool = 'External Labor'",toCond:"Spend Metric = 'Labor' AND OCP Flag Is Null",overview:'Routes external labor with no time tracking directly to IT Resource Towers, distributed evenly.',layman:"When contractors don\'t have time tracking data, their costs go straight to the IT tower layer and are spread evenly."},
-  {id:'labor_exec',from:'labor',to:'itrt',name:'Executive Labor',fromCond:"Cost Pool = 'Internal Labor' AND TT Exec Is Not Null AND Check for TT Is Null",toCond:"Source Table = 'Cost Center to Tower Mapping' AND Spend Metric = 'Labor'",overview:'Routes executive labor to IT Resource Towers, weighted by % Weighting.',layman:'Executive labor costs bypass standard time tracking and go to towers using pre-defined percentage weightings.'},
-  {id:'labor_fallout',from:'labor',to:'time_tracking',name:'Labor Fallout',fromCond:'Remainder — Labor ID Is NOT Null AND TT Exec Is Null',toCond:'None',overview:'Sends remaining labor costs (not exec, has Labor ID) to Time Tracking, distributed evenly.',layman:"Any internal labor costs that didn\'t match other rules are caught here and evenly distributed into time tracking."},
-  {id:'tt_itrt',from:'time_tracking',to:'itrt',name:'Time Tracking to Towers',fromCond:'None',toCond:"Source Table = 'Time Tracking Transform'",overview:'Routes all Time Tracking costs to IT Resource Towers, distributed evenly.',layman:'Time-tracked labor costs are pushed into the IT tower layer — connecting actual time worked to the towers where the work happened.'},
-  {id:'vend_ext_labor',from:'vendors',to:'labor',name:'External Labor (Vendors)',fromCond:"Cost Pool = 'External Labor' AND Data Source != 'ITPF Budget'",toCond:"Source Table = 'Cost Source Vendor Transform'",overview:'Routes external labor vendor costs back to the Labor table, distributed evenly.',layman:'External labor from the vendor layer is routed back into the labor pipeline so it flows through time tracking and tower allocation.'},
-  {id:'vend_apps_itrt',from:'vendors',to:'itrt',name:'Vendor Apps to ITRT',fromCond:"Vendor Name Is Not Null AND Application Name Is Not Null AND Cost Pool != 'External Labor' AND Is CSP = 'No'",toCond:"Source Table = 'ITRT Vendor Apps'",overview:'Routes vendor costs linked to specific applications to IT Resource Towers, weighted by Weighting.',layman:'Vendor costs tied to a specific application are pushed to the tower layer and distributed by weighting.'},
-  {id:'vend_itrt',from:'vendors',to:'itrt',name:'Vendor to ITRT',fromCond:"Cost Pool != 'External Labor' AND Application Name Is Null AND Is CSP = 'No' AND Cost Pool != 'MARKET DATA'",toCond:"Source Table = 'ITRT Vendor Apps' AND Application ID Is Null",overview:'Routes vendor costs with no application linkage to IT Resource Towers, weighted by Weighting.',layman:"Vendor costs that can\'t be tied to a specific app are still pushed to the tower layer by weighting."},
-  {id:'vend_mktdata',from:'vendors',to:'itrt',name:'Market Data (Vendors→ITRT)',fromCond:"Cost Pool = 'MARKET DATA'",toCond:"Cost Pool = 'MARKET DATA' AND OCP Flag Is Null",overview:'Routes Market Data vendor costs to IT Resource Towers, distributed evenly.',layman:'Market data costs pass through the vendor layer and spread evenly across matching IT towers.'},
-  {id:'vend_csp',from:'vendors',to:'cloud_sp',name:'Cloud Service Provider',fromCond:"Is CSP = 'Yes'",toCond:'None',overview:'Routes cloud service provider vendor costs to Cloud Service Provider, weighted by Cost.',layman:'All cloud vendor spend (AWS, Google, etc.) is separated out and sent to a dedicated cloud layer, weighted by actual cost.'},
-  {id:'ocp_itrt',from:'other_cost_pools',to:'itrt',name:'OCP to IT Resource Towers',fromCond:'None',toCond:"OCP Flag = 'Yes' AND Spend Type = 'RTB'",overview:'Routes Other Cost Pools amounts to IT Resource Towers (RTB spend only), distributed evenly.',layman:'Overhead pool costs flagged for tower allocation are spread evenly into the appropriate IT towers.'},
-  {id:'ocp_dc_itrt',from:'other_cost_pools',to:'itrt',name:'Data Center OCP to Towers',fromCond:'None',toCond:"OCP Flag = 'Yes' AND Spend Type = 'RTB'",overview:'Routes Data Center-related Other Cost Pools to IT Resource Towers, distributed evenly.',layman:'Data center overhead costs are redistributed evenly into the appropriate IT resource towers.'},
-  {id:'csp_aws',from:'cloud_sp',to:'itrt',name:'CSP — AWS to Towers',fromCond:"Vendor_CSP Key = 'Vendor_CSP - AMAZON WEB SERVICES'",toCond:"Source Table = 'Cloud Service Provider Towers Transform'",overview:'Routes AWS cloud costs to IT Resource Towers, distributed evenly.',layman:'AWS cloud spend is mapped to the specific IT towers it supports and spread evenly.'},
-  {id:'csp_google',from:'cloud_sp',to:'itrt',name:'CSP — Google Cloud to Towers',fromCond:"Vendor_CSP Key Contains 'GOOGLE LLC'",toCond:'None',overview:'Routes Google Cloud costs to IT Resource Towers, distributed evenly.',layman:'Google Cloud spend is mapped to the IT towers it supports and spread evenly.'},
-  {id:'itrt_mktdata_svc',from:'itrt',to:'biz_svcs',name:'Market Data (ITRT)',fromCond:"Cost Pool = 'Market Data'",toCond:'None',overview:'Routes Market Data IT Resource Tower costs directly to Business Services.',layman:'Market data costs in the tower layer flow directly to the business services that use them.'},
-  {id:'itrt_ocp_alloc',from:'itrt',to:'biz_svcs',name:'OCP Allocation (ITRT)',fromCond:'None',toCond:"OCP Flag = 'Yes'",overview:'Routes OCP-flagged IT Resource Tower costs to Business Services.',layman:'Overhead cost pool allocations at the tower layer are passed through to business services.'},
-  {id:'itrt_itmnt_svc',from:'itrt',to:'biz_svcs',name:'ITMNT to Services',fromCond:'None',toCond:"Source Table = 'ITMNT Services'",overview:'Routes ITMNT-linked IT Resource Tower costs to Business Services.',layman:'IT maintenance costs at the tower level that are linked to services flow directly to business services.'},
-  {id:'nd_biz',from:'network_devices',to:'biz_svcs',name:'Network Devices to Biz Svcs',fromCond:"Location != 'Denver' AND Location != 'St Pete' AND Location != 'Southfield'",toCond:"Service Offering = 'DATA NETWORK' AND Spend Metric = 'Hosting'",overview:'Routes network device costs from non-DC locations to Business Services (Data Network, Hosting).',layman:'Network devices outside the main data centers are allocated to the Data Network business service as hosting cost.'},
-  {id:'nd_dc',from:'network_devices',to:'data_centers',name:'Network Devices to Data Centers',fromCond:"Location In ('Denver','Southfield','St Pete')",toCond:'None',overview:'Routes network device costs from DC locations to Data Centers.',layman:'Network devices physically in data centers are allocated back to those data center records.'},
-  {id:'nd_eud',from:'network_devices',to:'eud',name:'Network Devices to EUD',fromCond:'None',toCond:'None',overview:'Routes network device costs to End User Devices, distributed evenly.',layman:'Network costs associated with end user connectivity are passed through to the end user device layer.'},
-  {id:'nd_storage',from:'network_devices',to:'storage_devices',name:'Network Devices to Storage',fromCond:'None',toCond:'None',overview:'Routes network device costs to Storage Devices, distributed evenly.',layman:'Network costs tied to storage infrastructure are passed through to storage devices.'},
-  {id:'db_sql',from:'databases',to:'servers',name:'Servers - SQL',fromCond:"Service = 'DATABASE - SQL'",toCond:'None',overview:'Routes SQL database costs to Servers, weighted by Estimated Cost.',layman:'SQL database costs are pushed to their associated servers and distributed by estimated cost.'},
-  {id:'db_oracle',from:'databases',to:'servers',name:'Servers - Oracle',fromCond:"Service = 'DATABASE - ORACLE'",toCond:'None',overview:'Routes Oracle database costs to Servers, weighted by Estimated Cost.',layman:'Oracle database costs are distributed to servers based on estimated cost.'},
-  {id:'db_enterprise',from:'databases',to:'servers',name:'Servers - Enterprise DB',fromCond:"Service = 'DATABASE - ENTERPRISE'",toCond:'None',overview:'Routes Enterprise database costs to Servers, distributed evenly.',layman:'Enterprise database costs are spread evenly across the servers associated with that service offering.'},
-  {id:'db_mongo',from:'databases',to:'servers',name:'Servers - Mongo',fromCond:"Service = 'DATABASE - MONGO'",toCond:'None',overview:'Routes MongoDB costs to Servers, weighted by Estimated Cost.',layman:'MongoDB costs are pushed to servers by estimated cost and environment.'},
-  {id:'db_exadata',from:'databases',to:'servers',name:'Servers - Exadata',fromCond:"Service = 'ORACLE EXADATA'",toCond:'None',overview:'Routes Oracle Exadata database costs to Servers.',layman:'Oracle Exadata costs are routed to the servers they run on.'},
-  {id:'db_nonstop',from:'databases',to:'servers',name:'Servers - HP NonStop (DB)',fromCond:"Service = 'HP NONSTOP'",toCond:"Database Type = 'HP NONSTOP'",overview:'Routes HP NonStop database costs to Servers, weighted by HP NonStop Weighting.',layman:'HP NonStop database costs are allocated to HP NonStop servers using specialized platform weighting.'},
-  {id:'ps_hyp',from:'phys_server',to:'hypervisor',name:'Hypervisor (Phys→Hyp)',fromCond:"virtual = 'TRUE' AND Is Host = 'TRUE'",toCond:'None',overview:'Routes physical server costs for virtualization hosts to Hypervisor.',layman:'Physical servers that are hypervisor hosts are separated and sent to the hypervisor layer.'},
-  {id:'ps_srv',from:'phys_server',to:'servers',name:'Physical Servers',fromCond:"Is Host? = 'FALSE' AND Database Type != 'HP NONSTOP' AND Database Type != 'Database - SQL'",toCond:'None',overview:'Routes non-host physical server costs to Servers.',layman:"Physical servers that aren\'t hypervisor hosts or specialized database platforms are passed directly to the server layer."},
-  {id:'ps_nonstop',from:'phys_server',to:'servers',name:'Servers: HP NonStop (Phys)',fromCond:"Database Type = 'HP NONSTOP'",toCond:'None',overview:'Routes HP NonStop physical server costs to Servers.',layman:'HP NonStop physical server costs flow to the server layer using specialized weighting.'},
-  {id:'stor_srv',from:'storage',to:'servers',name:'Location Based Allocation',fromCond:'None',toCond:'None',overview:'Routes all Storage costs to Servers, weighted by Estimated Cost, matched on Location.',layman:'Storage costs are pushed to the servers that use them, distributed by estimated cost and matched by location.'},
-  {id:'sd_stor',from:'storage_devices',to:'storage',name:'Storage Devices to Storage',fromCond:'None',toCond:'None',overview:'Routes Storage Device costs to the Storage table, distributed evenly.',layman:'Storage device costs are passed through to the storage layer using a pre-built key match.'},
-  {id:'cpds_cs',from:'cpds',to:'cloud_svcs',name:'Cloud Provider to Cloud Svcs',fromCond:'None',toCond:'None',overview:'Routes Cloud Provider Cost Driver Stage costs to Cloud Services.',layman:'Cloud cost driver records are passed directly to the Cloud Services layer — a clean passthrough.'},
-  {id:'cs_acds_c',from:'cloud_svcs',to:'acds',name:'Cloud Svcs to App Hosting',fromCond:'None',toCond:"Spend Metric = 'Hosting'",overview:'Routes Cloud Services costs to Application Cost Driver Stage (Hosting).',layman:'Cloud service costs are pushed to the application cost driver layer and spread evenly across consuming applications.'},
-  {id:'hyp_vms_h',from:'hypervisor',to:'servers',name:'VMs with Host',fromCond:'None',toCond:"Is Virtual Machine = 'TRUE'",overview:'Routes Hypervisor costs to virtual machine Servers, weighted by Estimated Cost.',layman:"Hypervisor costs are pushed down to the VMs running on each host and distributed by their estimated cost."},
-  {id:'hyp_vms_nh',from:'hypervisor',to:'servers',name:'VMs without Host',fromCond:"Is Host? = 'FALSE'",toCond:"Is Virtual Machine = 'TRUE'",overview:'Routes Hypervisor costs for non-host hypervisors to virtual machine Servers, weighted by CPU Cores.',layman:'When a hypervisor has no host designation, costs are still pushed to VMs and distributed by CPU core count.'},
-  {id:'hyp_fallout',from:'hypervisor',to:'acds',name:'Hosts Fallout',fromCond:'Remainder (after other Hypervisor rules run)',toCond:"Application Name = 'FALLOUT - ESX HOST WITH NO VMS'",overview:"Routes remaining hypervisor host costs that couldn\'t match any VMs to a fallout application record.",layman:'ESX hosts with no matching VMs are caught in a fallout bucket — flagging orphaned host costs for review.'},
-  {id:'tick_apps',from:'tickets',to:'acds',name:'Tickets to Applications',fromCond:"Application ID Is NOT Null AND Company In ('RJ United States','RJ Global Shared')",toCond:"Spend Metric = 'Tickets' AND Is HPNonStop != 'Yes'",overview:'Routes RJ ticket costs with an application link to ACDS (Tickets spend metric).',layman:'Support ticket costs tied to an application are pushed into the app cost driver layer.'},
-  {id:'tick_srv',from:'tickets',to:'servers',name:'Tickets to Servers',fromCond:'Application ID Is Null AND Server ID Is NOT Null',toCond:'None',overview:'Routes ticket costs with no application but a linked server to Servers.',layman:'Tickets tied to a server but not a specific application are pushed directly to the server layer.'},
-  {id:'srv_app',from:'servers',to:'acds',name:'Application (Servers)',fromCond:"Is HP NonStop != 'Yes' AND Is Exadata DB? != 'Yes'",toCond:"Spend Metric = 'Hosting' AND Is HPNonStop != 'Yes'",overview:'Routes standard server costs to ACDS (Hosting), distributed evenly.',layman:'Standard server hosting costs are pushed to the app cost driver layer and spread evenly across the applications running on each server.'},
-  {id:'srv_nonstop',from:'servers',to:'acds',name:'HP NonStop Apps',fromCond:"Is HP NonStop = 'Yes'",toCond:"Is HPNonStop = 'Yes'",overview:'Routes HP NonStop server costs to ACDS, weighted by New % Allocation.',layman:'HP NonStop server costs are allocated across HP NonStop applications using a specialized percentage allocation.'},
-  {id:'srv_exadata',from:'servers',to:'acds',name:'Exadata Applications',fromCond:"Is Exadata DB? = 'Yes'",toCond:"Is Exadata = 'Yes'",overview:'Routes Oracle Exadata server costs to ACDS, weighted by Weighted Factor.',layman:'Exadata server costs are distributed across Exadata-hosted applications using a specialized weighted factor.'},
-  {id:'srv_db_ent',from:'servers',to:'biz_svcs',name:'DB Enterprise to Services',fromCond:"Service Offering = 'DATABASE - ENTERPRISE'",toCond:"Spend Metric = 'Hosting'",overview:'Routes Enterprise Database server costs directly to Business Services (Hosting).',layman:'Enterprise database server costs bypass the application layer and go straight to business services.'},
-  {id:'srv_fallout',from:'servers',to:'acds',name:'Server to App (remainder)',fromCond:"Remainder — Service Offering Is Null AND Is HP NonStop != 'Yes'",toCond:"Application Name = 'FALLOUT - SERVER WITH NO APPLICATION'",overview:'Routes remaining server costs with no service offering to a fallout application record.',layman:"Any server costs that couldn\'t match an application are caught in a fallout bucket."},
-  {id:'proj_apps',from:'projects',to:'acds',name:'Projects to Applications',fromCond:"IT Sub-Tower != 'IT Help Desk' AND Application ID Is NOT Null",toCond:"Is HPNonStop != 'Yes'",overview:'Routes project costs with application linkage to ACDS, weighted by Percent Weighting.',layman:"Project spend tied to a specific app flows into the application cost driver layer, weighted by each app's share."},
-  {id:'proj_biz',from:'projects',to:'biz_svcs',name:'Projects to Biz Services',fromCond:"Remainder AND Service Name Is NOT Null AND IT Resource Tower != 'Compute'",toCond:'None',overview:'Routes remaining project costs with a service name to Business Services.',layman:"Project costs that couldn\'t be tied to an application but have a service name go straight to business services."},
-  {id:'proj_tick',from:'projects',to:'tickets',name:'Projects to Tickets',fromCond:"Application ID Is Null AND Service Name In (SERVICE DESK variants)",toCond:'None',overview:'Routes service desk project costs to Tickets, weighted by Priority Weight.',layman:'Service desk project costs without an app link are sent to the ticketing layer and distributed by ticket priority weight.'},
-  {id:'proj_db_excl',from:'projects',to:'databases',name:'Database: Exclude NonStop',fromCond:"IT Sub-Tower = 'Database' AND Application ID Is Null AND Service Name != 'HP NONSTOP'",toCond:"Vendor != 'HP NONSTOP'",overview:'Routes database sub-tower project costs (excluding HP NonStop) to Databases.',layman:"Database project costs that aren\'t HP NonStop and lack an app link are pushed to the database layer."},
-  {id:'proj_devops',from:'projects',to:'acds',name:'DevOps',fromCond:"Department = '2ML00' AND Application ID Is Null",toCond:"Support Group = 'DEVOPS'",overview:'Routes DevOps dept project costs to ACDS, weighted by Application Hosting Weighting.',layman:'DevOps project costs with no specific app link are allocated across applications based on hosting weighting.'},
-  {id:'proj_app_svcs',from:'projects',to:'acds',name:'Application Services',fromCond:"Department = '2TJ00' AND Application ID Is Null",toCond:"Support Group = 'APPLICATION SERVICES'",overview:'Routes Application Services dept project costs to ACDS, distributed evenly.',layman:'Application Services project costs without a specific app are spread evenly across the application services group.'},
-  {id:'proj_phys',from:'projects',to:'phys_server',name:'Physical Servers (Projects)',fromCond:"IT Resource Tower Contains 'Compute' AND Department Not In ('12U00','2ML00')",toCond:'None',overview:'Routes Compute tower project costs to Physical Servers, weighted by CPU Cores.',layman:'Compute project costs are pushed to physical servers and spread based on CPU core count.'},
-  {id:'proj_db_ns',from:'projects',to:'databases',name:'Database: HP NONSTOP',fromCond:"IT Sub-Tower = 'Servers' AND Department = '12U00'",toCond:"Vendor = 'HP NONSTOP'",overview:'Routes HP NonStop server project costs to Databases.',layman:'HP NonStop server costs are isolated and sent directly to the HP NonStop database record.'},
-  {id:'proj_dc',from:'projects',to:'data_centers',name:'Projects to Data Center',fromCond:"IT Resource Tower = 'Data Center' AND Application ID Is Null",toCond:'None',overview:'Routes Data Center tower project costs to Data Centers, weighted by Data Center RU Usage.',layman:'Data center project costs are allocated to data center records based on rack unit usage.'},
-  {id:'proj_eud',from:'projects',to:'eud',name:'Projects to EUD',fromCond:"IT Sub-Tower = 'IT Help Desk' AND Application ID Is NOT Null",toCond:'None',overview:'Routes IT Help Desk project costs with app linkage to End User Devices.',layman:'Help desk project costs tied to applications are pushed to the end user device layer and spread evenly by department.'},
-  {id:'dc_rack',from:'data_centers',to:'rj_dc_rack',name:'Data Centers to Rack Consol.',fromCond:'None',toCond:'None',overview:'Routes Data Center costs to RJ DC Rack Usage Consolidation, weighted by # of Racks.',layman:'Data center costs are distributed across rack usage records based on how many racks each location uses.'},
-  {id:'rack_phys',from:'rj_dc_rack',to:'phys_server',name:'Data Center to Servers (Compute)',fromCond:"Name = 'DistComp Servers'",toCond:'None',overview:'Routes DC rack costs for compute servers to Physical Servers.',layman:'Data center costs for compute server racks are pushed to physical servers by location.'},
-  {id:'rack_srv_net',from:'rj_dc_rack',to:'servers',name:'Datacenter to Servers Network',fromCond:"Name = 'Network and Security'",toCond:'None',overview:'Routes DC rack costs for network/security to Servers, weighted by CPU Cores.',layman:'Network and security rack costs are distributed to servers based on CPU core count.'},
-  {id:'rack_stor',from:'rj_dc_rack',to:'storage',name:'Data Center to Storage',fromCond:"Name = 'DistComp Storage'",toCond:'None',overview:'Routes DC rack costs for storage to the Storage table.',layman:'Data center storage rack costs are passed to storage records by location.'},
-  {id:'eud_biz',from:'eud',to:'biz_svcs',name:'EUD to Biz Svcs (HW/SW)',fromCond:'None',toCond:"Spend Metric = 'Hardware/Software'",overview:'Routes End User Device costs to Business Services (Hardware/Software).',layman:'End user device costs are pushed to the business service layer and spread evenly by device type.'},
-  {id:'acds_apps',from:'acds',to:'applications',name:'App Cost Driver to Apps',fromCond:'None',toCond:'None',overview:'Routes all ACDS costs to Applications, weighted by Percent Weighting.',layman:'All costs accumulated in the application cost driver layer are pushed to final application records — assigning a fully-loaded IT cost to each application.'},
-  {id:'apps_biz',from:'applications',to:'biz_svcs',name:'Applications to Biz Services',fromCond:'Service Offering Is NOT Null',toCond:'None',overview:'Routes application costs with service offering linkage to Business Services.',layman:'Application costs tied to a business service are passed through to the service layer — connecting fully-loaded application costs to the business services they enable.'},
-  {id:'rjtow_biz',from:'rj_tower_svc',to:'biz_svcs',name:'Towers to Services',fromCond:'None',toCond:'None',overview:'Routes all RJ Tower to Service Mapping Transform costs to Business Services.',layman:'Tower costs with a direct service mapping are passed through to business services using the service name match.'},
+// ALLOCS is populated entirely from Google Sheets on page load
+// Do not add hardcoded allocations here — edit the Google Sheet instead
+const ALLOCS=[];
 
-  // ── NEW ITRT ALLOCATIONS ─────────────────────────────────────
-  {id:'itrt_towers_proj_labor',from:'itrt',to:'projects',name:'Towers to Projects (Labor)',
-   fromCond:"Spend Metric = 'Labor' AND Project ID Is NOT Null AND Source Table = 'Time Tracking Transform'",
-   toCond:"Source Table = 'Time Tracking Projects'",
-   overview:'Routes IT Resource Tower labor costs that are project-linked and originated from time tracking to the Projects table, weighted by Weighting, matched on Project ID and Cost Center to Department.',
-   layman:'Time-tracked labor costs at the tower level that belong to specific projects are routed back into the Projects layer — ensuring project labor spend is properly attributed to the right project records.'},
-
-  {id:'itrt_itmnt_sub_app',from:'itrt',to:'acds',name:'ITMNT or Subscription App',
-   fromCond:"Source Table = 'ITRT Vendor Apps' AND Is Consulting Related = 'No' AND Application ID Is NOT Null",
-   toCond:'None',
-   overview:'Routes IT Resource Tower costs from vendor app records (non-consulting, app-linked) to the Application Cost Driver Stage, distributed evenly, matched on Application ID, Spend Metric, and Spend Type.',
-   layman:'IT maintenance and subscription costs tied to a specific application go directly into the app cost driver stage — keeping app-specific vendor spend with the right applications.'},
-
-  {id:'itrt_proj_remaining',from:'itrt',to:'projects',name:'Projects Remaining',
-   fromCond:"Remainder AND Project ID Is NOT Null AND IT Resource Sub-Tower Name != 'Online Storage' AND Is Amort != 'Yes' AND Is No Consulting Related & Blank App ID != 'Yes'",
-   toCond:"Source Table != 'RJ Fixed Assets Resource Towers'",
-   overview:'Routes remaining IT Resource Tower project-linked costs (excluding Online Storage, amortized, and no-consulting/blank-app records) to Projects, weighted by Weighting, matched on Project ID and Spend Metric.',
-   layman:'Any tower costs linked to a project that weren\'t consumed by other rules are caught here and pushed to projects — a safety net ensuring project-tagged spend lands in the right place.'},
-
-  {id:'itrt_amort_fa',from:'itrt',to:'fa_amort_obj',name:'Amortized Fixed Assets',
-   fromCond:"Is Amort = 'Yes' AND Source Table = 'RJ Fixed Assets Resource Towers'",
-   toCond:'None',
-   overview:'Routes IT Resource Tower costs flagged as amortized fixed assets to the Fixed Asset Amortization table, distributed evenly, matched on Is Amort flag.',
-   layman:'Amortized asset costs at the tower level are separated out and routed to the Fixed Asset Amortization object — keeping depreciation/amortization flows clearly isolated from other tower spend.'},
-
-  {id:'itrt_direct_svc_new',from:'itrt',to:'biz_svcs',name:'Direct to Services',
-   fromCond:"Cost Pool Contains 'Labor' OR (Source Table Contains 'Asset' AND Service Name In ('COMPUTER','WORKSPACE SERVICES')) OR (IT Resource Sub-Tower Name = 'Enterprise Data Center' AND Source Table Does NOT Contain 'OCP') AND Project ID Is NOT Null AND Application ID Is Null AND Is Amort != 'Yes'",
-   toCond:"Spend Type = 'RTB'",
-   overview:'Routes IT Resource Tower costs meeting labor, asset, or data center criteria directly to Business Services (RTB spend type), distributed evenly, matched on Service Name to Service Offering and Spend Metric.',
-   layman:'Certain tower costs — particularly labor, workspace, and data center costs — have a clear direct service mapping and skip the application layer entirely, flowing straight to business services.'},
-
-  {id:'itrt_towers_proj_fa',from:'itrt',to:'projects',name:'Towers to Project (Fixed Assets)',
-   fromCond:"Source Table = 'RJ Fixed Assets Resource Towers' AND Project ID Is NOT Null AND Is Amort != 'Yes'",
-   toCond:"Source Table = 'RJ Fixed Assets Resource Towers'",
-   overview:'Routes IT Resource Tower non-amortized fixed asset costs (project-linked) to the Projects table, distributed evenly, matched on Project ID.',
-   layman:'Non-amortized fixed asset costs at the tower level that are linked to a project are routed back into the Projects layer — keeping capital project asset spend properly attributed.'},
-
-  {id:'itrt_db_service',from:'itrt',to:'databases',name:'Database: Service',
-   fromCond:"Service Name Contains 'Database' OR Service Name Contains 'Oracle' AND Service Name Is NOT Null AND IT Resource Tower Name != 'Storage' AND Project ID Is Null AND Is Amort != 'Yes' AND IT Resource Sub-Tower Name != 'Database'",
-   toCond:'None',
-   overview:'Routes IT Resource Tower database/Oracle service costs (excluding Storage tower, projects, amortized, and Database sub-tower) to Databases, weighted by Weighting, matched on Service Name to Service.',
-   layman:'Tower-level database and Oracle service costs that aren\'t tied to a project or the database sub-tower are pushed into the Databases layer and distributed by weighting.'},
-
-  {id:'itrt_cloud_cpds',from:'itrt',to:'cpds',name:'IT Resource Towers (Cloud)',
-   fromCond:"Is Cloud = 'Yes' AND Subscriptions Flag Is Null",
-   toCond:'None',
-   overview:'Routes IT Resource Tower cloud costs to the Cloud Provider Cost Driver Stage, weighted by Cost, matched on Vendor_CSP Key and ITRT_Cloud_Key.',
-   layman:'Cloud-tagged tower costs are separated out and routed to the Cloud Provider Cost Driver Stage, weighted by actual cost — setting them up for cloud-specific application allocation downstream.'},
-
-  {id:'itrt_network',from:'itrt',to:'network_devices',name:'Network (ITRT)',
-   fromCond:"IT Resource Sub-Tower Name In ('LAN/WAN','Transport') AND Project ID Is Null AND Application Name Is Null AND Cost Pool != 'MARKET DATA' AND OCP Flag Is Null",
-   toCond:'None',
-   overview:'Routes IT Resource Tower LAN/WAN and Transport sub-tower costs to Network Devices, weighted by Total Ports, with no data relationship matching.',
-   layman:'Network infrastructure tower costs are pushed to the network device layer and distributed based on port count — so devices with more ports absorb a proportionally larger share.'},
-
-  {id:'itrt_servers_phys',from:'itrt',to:'phys_server',name:'Servers (ITRT)',
-   fromCond:"Spend Metric != 'Labor' AND Cost Pool != 'MARKET DATA' AND Application ID Is Null AND Project ID Is Null AND IT Resource Sub-Tower Name = 'Servers'",
-   toCond:'None',
-   overview:'Routes IT Resource Tower server sub-tower costs (non-labor, non-market-data, no app or project) to Physical Servers, weighted by CPU Cores.',
-   layman:'Server tower costs are pushed to physical server records and distributed by CPU core count — so servers with more processing capacity absorb more of the infrastructure cost.'},
-
-  {id:'itrt_db_vendor',from:'itrt',to:'databases',name:'Database - Vendor',
-   fromCond:"IT Resource Sub-Tower Name = 'Database' AND Application ID Is NOT Null AND Service Name Contains 'DATABASE' AND Project ID Is Null",
-   toCond:'None',
-   overview:'Routes IT Resource Tower database sub-tower costs (app-linked, DATABASE service name, no project) to Databases, weighted by Weighting, matched on Vendor Name to Vendor.',
-   layman:'Database sub-tower costs tied to a specific application and vendor are pushed into the Databases layer by weighting — keeping vendor-specific database costs attributed to the right records.'},
-
-  {id:'itrt_storage',from:'itrt',to:'storage',name:'IT Resource Towers (Storage)',
-   fromCond:"IT Resource Tower Name = 'Storage' AND Application Name Is Null AND Project ID Is Null AND Cost Center != '12U00' AND Cost Pool != 'MARKET DATA' AND OCP Flag Is Null AND Cost Pool != 'Internal Labor'",
-   toCond:'None',
-   overview:'Routes IT Resource Tower storage costs (no app, no project, excluding specific cost center, market data, OCP, and internal labor) to Storage, weighted by ProvisionedSpaceGB.',
-   layman:'Storage tower costs are pushed to the storage layer and distributed based on provisioned capacity (GB) — so environments using more storage absorb a proportionally larger share.'},
-
-  {id:'bs_hc_all',from:'biz_svcs',to:'consumption',name:'Headcount - All Departments',fromCond:"UoM = 'Headcount' AND BU = 'ALL'",toCond:'None',overview:'Routes business service costs by headcount (all depts) to Consumption Source, weighted by Qty.',layman:'Services allocated by headcount are distributed proportionally based on employee count — bigger departments absorb more cost.'},
-  {id:'bs_100pct',from:'biz_svcs',to:'consumption',name:'100% to Department',fromCond:"UoM = '100% to Department'",toCond:'Dept for Allocation = Dept Name',overview:'Routes costs designated for a single department to Consumption Source.',layman:'When a service is 100% owned by one department, all its costs go directly to that department.'},
-  {id:'bs_fa_pcg',from:'biz_svcs',to:'consumption',name:'FA Count - PCG ALL',fromCond:"UoM = 'FA Count' AND BU = 'PCG'",toCond:"BU Name = 'PCG'",overview:'Routes PCG business service costs by financial advisor count to Consumption Source.',layman:'Services used by PCG advisors are allocated based on FA count — branches with more advisors absorb more cost.'},
-  {id:'bs_css',from:'biz_svcs',to:'consumption',name:'CSS Sys Data',fromCond:"UoM = 'CSS Sys Data'",toCond:'None',overview:'Routes costs by CSS system data to Consumption Source.',layman:'Services driven by CSS system usage are distributed based on actual system activity metrics.'},
-  {id:'bs_cob',from:'biz_svcs',to:'consumption',name:'COB Data - PCG',fromCond:"UoM = 'COB (Client Onboarding Data)'",toCond:"BU Name = 'PCG'",overview:'Routes PCG costs by client onboarding data to Consumption Source.',layman:'Onboarding-related service costs are allocated to PCG consumers based on client onboarding volume.'},
-  {id:'bs_client_access',from:'biz_svcs',to:'consumption',name:'Client Access Data - PCG',fromCond:"UoM = 'Client Access Data' AND BU = 'PCG'",toCond:"BU Name = 'PCG'",overview:'Routes PCG costs by client access data to Consumption Source.',layman:'Services tied to client access activity are allocated to PCG consumers based on actual client access counts.'},
-  {id:'bs_adv_search',from:'biz_svcs',to:'consumption',name:'Advanced Search Data',fromCond:"UoM = 'Advanced Search Data'",toCond:'None',overview:'Routes costs by advanced search usage to Consumption Source.',layman:'Advanced search service costs are distributed based on search usage volume.'},
-  {id:'bs_opp_es',from:'biz_svcs',to:'consumption',name:'Opp ES Data',fromCond:"UoM = 'Opportunities - ES data'",toCond:'None',overview:'Routes costs by Opportunities ES data to Consumption Source.',layman:'Opportunity management service costs are distributed based on ES opportunity data volume.'},
-  {id:'bs_trades_all',from:'biz_svcs',to:'consumption',name:'Trades - ALL',fromCond:"UoM = 'Trades' AND BU != 'PCG'",toCond:'None',overview:'Routes non-PCG costs by trade volume to Consumption Source.',layman:'Trading platform costs for non-PCG business units are distributed based on trade volume.'},
-  {id:'bs_ada',from:'biz_svcs',to:'consumption',name:'Ada Mgmt Data',fromCond:"UoM = 'Ada Management Data'",toCond:'None',overview:'Routes costs by Ada management data to Consumption Source.',layman:'Ada platform costs are distributed based on Ada management data volume.'},
-  {id:'bs_client_ctr',from:'biz_svcs',to:'consumption',name:'Client Ctr Data - PCG',fromCond:"UoM = 'Client Center Data' AND BU = 'PCG'",toCond:"BU Name = 'PCG'",overview:'Routes PCG costs by Client Center data to Consumption Source.',layman:'Client Center service costs are allocated to PCG consumers based on Client Center usage data.'},
-  {id:'bs_client_rep',from:'biz_svcs',to:'consumption',name:'Client Rep Data',fromCond:"UoM = 'Client Reporting Data'",toCond:'None',overview:'Routes costs by client reporting data to Consumption Source.',layman:'Client reporting platform costs are distributed based on reporting usage volume.'},
-  {id:'bs_apptio',from:'biz_svcs',to:'consumption',name:'Apptio Weighting',fromCond:"UoM = 'Apptio Weighting'",toCond:'None',overview:'Routes costs by Apptio weighting to Consumption Source.',layman:"Apptio platform costs are allocated using Apptio's own weighting methodology."},
-  {id:'bs_sec_mov',from:'biz_svcs',to:'consumption',name:'Security Movement Data',fromCond:"UoM = 'Security Movement Data'",toCond:'None',overview:'Routes costs by security movement data to Consumption Source.',layman:'Security movement service costs are distributed based on security transaction volume.'},
-  {id:'bs_notif',from:'biz_svcs',to:'consumption',name:'Notif ES Data',fromCond:"UoM = 'Notifications ES Data'",toCond:'None',overview:'Routes costs by notifications ES data to Consumption Source.',layman:'Notification service costs are distributed based on notification volume data.'},
-  {id:'bs_tableau',from:'biz_svcs',to:'consumption',name:'Tableau Licenses',fromCond:"UoM = 'Tableau Licenses'",toCond:'None',overview:'Routes costs by Tableau license count to Consumption Source.',layman:'Tableau costs are allocated based on license count.'},
-  {id:'bs_wealth',from:'biz_svcs',to:'consumption',name:'Wealth Management Data',fromCond:"UoM = 'Wealth Management Data'",toCond:'None',overview:'Routes costs by wealth management data to Consumption Source.',layman:'Wealth management platform costs are distributed based on activity volume.'},
-  {id:'bs_csp_data',from:'biz_svcs',to:'consumption',name:'CSP Data',fromCond:"UoM = 'CSP Data'",toCond:'None',overview:'Routes costs by CSP data to Consumption Source.',layman:'Cloud service costs are distributed based on CSP usage data.'},
-  {id:'bs_hc_scl',from:'biz_svcs',to:'consumption',name:'HC - Supv/Compl/Legal',fromCond:"UoM = 'Headcount' AND Dept = 'SUPERVISION, COMPLIANCE, LEGAL'",toCond:'Dept Name In (SUPERVISION, COMPLIANCE, LEGAL)',overview:'Routes costs to Supervision, Compliance, and Legal by headcount.',layman:'Services used by regulatory and compliance functions are allocated to those departments by headcount.'},
-  {id:'bs_esign',from:'biz_svcs',to:'consumption',name:'eSignature Data',fromCond:"UoM = 'eSignature Data'",toCond:'None',overview:'Routes costs by eSignature usage to Consumption Source.',layman:'eSignature platform costs are distributed based on signature usage volume.'},
-  {id:'bs_smart',from:'biz_svcs',to:'consumption',name:'Smartsheet Licenses',fromCond:"UoM = 'Smartsheet Licenses'",toCond:'None',overview:'Routes costs by Smartsheet license count to Consumption Source.',layman:'Smartsheet costs are allocated by license count.'},
-  {id:'bs_trades_pcg',from:'biz_svcs',to:'consumption',name:'Trades - PCG',fromCond:"UoM = 'Trades' AND BU = 'PCG'",toCond:"BU Name = 'PCG'",overview:'Routes PCG costs by trade volume to Consumption Source.',layman:'PCG trading platform costs are distributed to PCG consumers based on trade volume.'},
-  {id:'bs_hyperion',from:'biz_svcs',to:'consumption',name:'Hyperion Users',fromCond:"UoM = 'Hyperion Users'",toCond:'None',overview:'Routes costs by Hyperion user count to Consumption Source.',layman:'Hyperion financial planning platform costs are allocated based on user count.'},
-  {id:'bs_morning',from:'biz_svcs',to:'consumption',name:'MorningStar Licenses',fromCond:"UoM = 'Morningstar Licenses'",toCond:'None',overview:'Routes costs by Morningstar license count to Consumption Source.',layman:'Morningstar data subscription costs are allocated by license count.'},
-  {id:'bs_gpm',from:'biz_svcs',to:'consumption',name:'GPM Data',fromCond:"UoM = 'GPM Data'",toCond:'None',overview:'Routes costs by GPM data to Consumption Source.',layman:'GPM platform costs are distributed based on GPM data volume.'},
-  {id:'bs_hc_reg',from:'biz_svcs',to:'consumption',name:'HC - Regulatory ALL',fromCond:"UoM = 'Headcount' AND BU = 'Regulatory'",toCond:"BU Name = 'Regulatory'",overview:'Routes Regulatory BU costs by headcount to Consumption Source.',layman:'Services used by the Regulatory BU are allocated by headcount within that BU.'},
-  {id:'bs_money_mov',from:'biz_svcs',to:'consumption',name:'Money Movement Data',fromCond:"UoM = 'Money Movement Data'",toCond:'None',overview:'Routes costs by money movement data to Consumption Source.',layman:'Money movement platform costs are distributed based on transaction volume.'},
-  {id:'bs_50split',from:'biz_svcs',to:'consumption',name:'50% Split Institutional',fromCond:"UoM = '100% to Department' AND Dept = 'CM&A FIXED INCOME, CM&A GE'",toCond:'Dept Name In (CM&A FIXED INCOME, CM&A GE)',overview:'Routes costs for CM&A Fixed Income and CM&A GE, split evenly.',layman:'Services shared equally between the two CM&A institutional departments are split 50/50.'},
-
-  {id:'opex_fixed_cs',from:'opex_fixed',to:'cost_source',name:'OpEx Fixed to Cost Source',fromCond:"Cost Source Model Driver = 'OPEX - ACTUALS - FIXED'",toCond:'None',overview:'Routes fixed operating expenditure GL amounts into Cost Source. Uses the OpEx Fixed model driver formula to identify and load fixed-cost actuals.',layman:'Fixed operating costs (like rent, depreciation, and fixed salaries) are pulled from the GL and loaded into Cost Source so they can flow through the rest of the cost model.'},
-  {id:'opex_var_cs',from:'opex_var',to:'cost_source',name:'OpEx Variable to Cost Source',fromCond:"Cost Source Model Driver = 'OPEX - ACTUALS - VARIABLE'",toCond:'None',overview:'Routes variable operating expenditure GL amounts into Cost Source. Uses the OpEx Variable model driver formula to identify and load variable-cost actuals.',layman:'Variable operating costs (like contractor spend and usage-based charges) are pulled from the GL and loaded into Cost Source so they can flow through the rest of the cost model.'},
-];
 
 // ═══════════════════════════════════════════
 // LAYOUT — load saved or use defaults
@@ -539,26 +362,8 @@ function saveLayout(){
   setTimeout(()=>{btn.textContent=orig;btn.style.color='';},1500);
 }
 
-function resetEndpoints(){
-  if(!confirm('Reset all endpoint positions back to auto?')) return;
-  endpointOverrides={};
-  localStorage.removeItem(ENDPOINTS_KEY);
-  recomputeAll();render();
-}
 
-function resetLines(){
-  if(!confirm('Reset all line routes back to auto-routing?')) return;
-  routeOverrides={};
-  localStorage.removeItem(ROUTES_KEY);
-  recomputeAll();render();
-}
 
-function resetLayout(){
-  if(!confirm('Reset all node positions to default?')) return;
-  localStorage.removeItem(LS_KEY);
-  NODE_DEFAULTS.forEach(d=>{const n=N[d.id];n.x=d.x;n.y=d.y;});
-  recomputeAll(); render();
-}
 
 
 function exportFullSnapshot(){
@@ -660,17 +465,7 @@ ctx.scale(DPR,DPR);
 // ═══════════════════════════════════════════
 // ROUTING + JUMPS
 // ═══════════════════════════════════════════
-const pairGroups={};
-ALLOCS.forEach(a=>{
-  const k=a.from+'→'+a.to;
-  if(!pairGroups[k]) pairGroups[k]=[];
-  pairGroups[k].push(a.id);
-});
-ALLOCS.forEach(a=>{
-  const k=a.from+'→'+a.to;
-  a._pt=pairGroups[k].length;
-  a._pi=pairGroups[k].indexOf(a.id);
-});
+// pairGroups computed in syncFromSheets after loading from sheet
 
 function computeRoute(a){
   const fn=N[a.from],tn=N[a.to]; if(!fn||!tn) return null;
@@ -932,7 +727,7 @@ function toggleEditMode(){
   editMode=!editMode;
   document.getElementById('btn-edit').classList.toggle('active',editMode);
   document.getElementById('edit-indicator').style.display=editMode?'inline':'none';
-  ['btn-save','btn-reset','btn-reset-lines','btn-reset-eps','btn-export','btn-snapshot','btn-import-lbl','btn-publish-layout'].forEach(id=>{
+  ['btn-save','btn-export','btn-snapshot','btn-import-lbl','btn-publish-layout'].forEach(id=>{
     document.getElementById(id).style.display=editMode?'inline-block':'none';
   });
 }
@@ -1344,16 +1139,64 @@ function applySheetRows(rows) {
   return updated;
 }
 
+
+// ── NODE NAME → ID MAPPING ────────────────────────────────────
+// Maps Google Sheet "From"/"To" values to internal node IDs
+// Add aliases here if sheet uses different names
+const NODE_NAME_MAP = {
+  'consumption source':'consumption',
+  'business services':'biz_svcs',
+  'rj tower to service mapping transform':'rj_tower_svc',
+  'rj tower→service mapping transform':'rj_tower_svc',
+  'rj tower to service mapping':'rj_tower_svc',
+  'applications':'applications',
+  'application cost driver stage':'acds',
+  'cloud services':'cloud_svcs',
+  'servers':'servers',
+  'hypervisor':'hypervisor',
+  'physical server':'phys_server',
+  'storage':'storage',
+  'storage devices':'storage_devices',
+  'databases':'databases',
+  'cloud provider cost driver stage':'cpds',
+  'fixed asset amortization':'fa_amort_obj',
+  'tickets':'tickets',
+  'end user devices':'eud',
+  'data centers':'data_centers',
+  'network devices':'network_devices',
+  'projects':'projects',
+  'rj data center rack usage consolidation':'rj_dc_rack',
+  'rj dc rack usage consol.':'rj_dc_rack',
+  'rj data center rack usage consol.':'rj_dc_rack',
+  'rj data center rack':'rj_dc_rack',
+  'it resource towers':'itrt',
+  'time tracking':'time_tracking',
+  'labor':'labor',
+  'vendors':'vendors',
+  'fixed asset ledger':'fixed_asset_ledger',
+  'other cost pools':'other_cost_pools',
+  'cloud service provider':'cloud_sp',
+  'cost source':'cost_source',
+  'opex fixed':'opex_fixed',
+  'opex variable':'opex_var',
+};
+
+function resolveNode(name){
+  if(!name) return null;
+  const lc=name.trim().toLowerCase();
+  return NODE_NAME_MAP[lc]||null;
+}
+
 async function syncFromSheets(){
-  setSyncState('loading','Syncing with Google Sheets...');
+  setSyncState('loading','Loading allocations from Google Sheets...');
   try{
-    const resp=await fetch(SHEETS_CSV_URL);
+    const resp=await fetch('https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/export?format=csv&gid=0');
     if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const text=await resp.text();
     const lines=text.split(/\r?\n/).filter(l=>l.trim());
-    if(lines.length<2) throw new Error('Sheet appears empty');
+    if(lines.length<2) throw new Error('Sheet appears empty — add allocation rows to continue');
 
-    // Parse headers — normalize to our field names
+    // Parse headers
     const rawHeaders=parseCSVLine(lines[0]);
     const headers=rawHeaders.map(h=>{
       const lc=h.toLowerCase().trim().replace(/"/g,'');
@@ -1366,110 +1209,57 @@ async function syncFromSheets(){
         'to conditions':'toCond','tocond':'toCond',
         'allocation overview / strategy / purpose':'overview','overview':'overview',
         "layman's summary (elevator pitch)":'layman','layman':'layman',
-        'notes':'notes','color':'color','arrow color':'color'
+        'notes':'notes',
+        'color':'color','arrow color':'color'
       };
       return map[lc]||lc;
     });
 
-    // Parse data rows
-    const sheetRows=[];
+    // Clear existing allocations entirely — sheet is source of truth
+    ALLOCS.length=0;
+
+    // Parse rows and build ALLOCS fresh
+    let added=0, skipped=0;
     for(let i=1;i<lines.length;i++){
       const cols=parseCSVLine(lines[i]);
       if(!cols.some(c=>c.replace(/"/g,'').trim())) continue;
       const row={};
       headers.forEach((h,idx)=>{row[h]=(cols[idx]||'').replace(/"/g,'').trim();});
-      if(row.name||row.from||row.to) sheetRows.push(row);
+
+      // Must have at minimum: from, to, name
+      if(!row.from||!row.to||!row.name){ skipped++; continue; }
+
+      // Resolve node IDs
+      const fromId=resolveNode(row.from);
+      const toId=resolveNode(row.to);
+      if(!fromId||!toId){
+        console.warn(`Row ${i}: Could not resolve nodes "${row.from}" → "${row.to}" for "${row.name}"`);
+        skipped++;
+        continue;
+      }
+
+      // Build alloc object — ID comes from sheet column A
+      const allocId=row.sheetId||('auto_'+i);
+      ALLOCS.push({
+        id:allocId,
+        sheetId:allocId,
+        from:fromId,
+        to:toId,
+        name:row.name,
+        fromCond:row.fromCond||'None',
+        toCond:row.toCond||'None',
+        overview:row.overview||'',
+        layman:row.layman||'',
+        notes:row.notes||'',
+        colorOverride:(row.color&&row.color.startsWith('#'))?row.color:null,
+        _pt:1, _pi:0
+      });
+      added++;
     }
 
-    // Remove stale dynamic allocs from previous syncs
-    for(let i=ALLOCS.length-1;i>=0;i--){
-      if(ALLOCS[i]._dynamic) ALLOCS.splice(i,1);
-    }
+    if(added===0) throw new Error(`No valid allocations loaded. Check that From/To column values match node names exactly.`);
 
-    // Build lookup maps for fast matching
-    const allocById={};   // sheetId → alloc
-    const allocByKey={};  // from+to+name → alloc
-    ALLOCS.forEach(a=>{
-      if(a.sheetId) allocById[a.sheetId]=a;
-      const fn=N[a.from]?.lbl.join(' ').toLowerCase()||a.from.toLowerCase();
-      const tn=N[a.to]?.lbl.join(' ').toLowerCase()||a.to.toLowerCase();
-      allocByKey[fn+'|'+tn+'|'+a.name.toLowerCase()]=a;
-    });
-
-    let updated=0, added=0;
-
-    sheetRows.forEach(row=>{
-      if(!row.name||!row.from||!row.to) return;
-      const csvFrom=row.from.trim().toLowerCase();
-      const csvTo=row.to.trim().toLowerCase();
-      const csvName=row.name.trim().toLowerCase();
-
-      // Find nodes
-      const fromNode=NODES.find(n=>
-        n.lbl.join(' ').toLowerCase()===csvFrom||
-        n.id.toLowerCase()===csvFrom
-      );
-      const toNode=NODES.find(n=>
-        n.lbl.join(' ').toLowerCase()===csvTo||
-        n.id.toLowerCase()===csvTo
-      );
-
-      // Match priority: 1) sheet ID, 2) from+to+name, 3) from+to (unique pair only)
-      let alloc=null;
-      if(row.sheetId&&allocById[row.sheetId]){
-        alloc=allocById[row.sheetId];
-      } else {
-        const key=csvFrom+'|'+csvTo+'|'+csvName;
-        alloc=allocByKey[key];
-      }
-      // Fallback: unique from+to pair only (never match if multiple exist)
-      if(!alloc&&fromNode&&toNode){
-        const cands=ALLOCS.filter(a=>a.from===fromNode.id&&a.to===toNode.id&&!a._dynamic);
-        if(cands.length===1) alloc=cands[0];
-        // If multiple hardcoded allocs exist for this pair, don't guess
-      }
-
-      if(alloc){
-        // Update existing alloc
-        if(row.sheetId) alloc.sheetId=row.sheetId;
-        if(row.name)     alloc.name    =row.name;
-        if(row.overview) alloc.overview=row.overview;
-        if(row.layman)   alloc.layman  =row.layman;
-        if(row.fromCond) alloc.fromCond=row.fromCond;
-        if(row.toCond)   alloc.toCond  =row.toCond;
-        alloc.notes=row.notes||'';
-        if(row.color&&row.color.startsWith('#')) alloc.colorOverride=row.color;
-        else alloc.colorOverride=null;
-        updated++;
-      } else if(fromNode&&toNode){
-        // NEW allocation — only create if this is a brand new node pair
-        // OR if sheet has an explicit ID proving it's intentionally new
-        const hasHardcoded=ALLOCS.some(a=>
-          !a._dynamic&&a.from===fromNode.id&&a.to===toNode.id
-        );
-        const nameExists=ALLOCS.some(a=>{
-          const fn=N[a.from]?.lbl.join(' ').toLowerCase()||a.from.toLowerCase();
-          const tn=N[a.to]?.lbl.join(' ').toLowerCase()||a.to.toLowerCase();
-          return fn===csvFrom&&tn===csvTo&&a.name.toLowerCase()===csvName;
-        });
-        if(nameExists) return; // true duplicate — skip
-        // Allow new alloc if: has explicit sheetId OR is a genuinely new node pair
-        if(hasHardcoded&&!row.sheetId) return; // existing pair, no ID — skip to avoid duplicates
-        const newId=row.sheetId||('dyn_'+csvName.replace(/[^a-z0-9]/g,'_').slice(0,25)+'_'+Date.now());
-        ALLOCS.push({
-          id:newId, sheetId:row.sheetId||newId,
-          from:fromNode.id, to:toNode.id,
-          name:row.name, fromCond:row.fromCond||'None',
-          toCond:row.toCond||'None', overview:row.overview||'',
-          layman:row.layman||'', notes:row.notes||'',
-          colorOverride:row.color?.startsWith('#')?row.color:null,
-          _pt:1,_pi:0,_dynamic:true
-        });
-        added++;
-      }
-    });
-
-    // Recompute pair groups
+    // Compute pair groups for spread routing
     const pairG={};
     ALLOCS.forEach(a=>{
       const k=a.from+'→'+a.to;
@@ -1481,21 +1271,29 @@ async function syncFromSheets(){
       a._pi=pairG[a.from+'→'+a.to].indexOf(a.id);
     });
 
-    recomputeAll(); render();
+    // Also update badges based on actual counts
+    const inCount={}, outCount={};
+    ALLOCS.forEach(a=>{
+      inCount[a.to]=(inCount[a.to]||0)+1;
+      outCount[a.from]=(outCount[a.from]||0)+1;
+    });
+
+    recomputeAll();
+    render();
 
     const ts=new Date().toLocaleTimeString();
-    let msg=`✓ Synced — ${sheetRows.length} allocations`;
-    if(added>0) msg+=` · ${added} new arrow${added>1?'s':''} added`;
-    msg+=` · Last sync: ${ts}`;
+    const msg=`✓ Loaded ${added} allocations from Google Sheets${skipped>0?` (${skipped} rows skipped — check node names)`:''} · ${ts}`;
     setSyncState('ok',msg);
-    if(selA) renderAllocPanel(selA);
+    if(selA){ const updated=ALLOCS.find(a=>a.id===selA.id); if(updated)renderAllocPanel(updated); else closePanel(); }
     if(selN) renderNodePanel(selN);
 
   }catch(err){
+    ALLOCS.length=0;
+    render();
     setSyncState('error',
       err.message.includes('Failed to fetch')||err.message.includes('NetworkError')
-        ?'⚠ Could not reach Google Sheets — check Share permissions'
-        :`⚠ Sync error: ${err.message}`
+        ?'⚠ Cannot reach Google Sheets — check your internet connection and that the sheet is shared publicly'
+        :`⚠ ${err.message}`
     );
   }
 }
@@ -1586,6 +1384,17 @@ function publishLayout(){
     '4. Choose "Replace current sheet" → Import\n\n'+
     'Everyone will see your layout next time they refresh the page!'
   ),100);
+}
+
+
+function showNodeNames(){
+  const names=Object.entries(NODE_NAME_MAP)
+    .filter(([k,v])=>k===k.trim()&&!k.includes('→'))
+    .map(([k,v])=>k.split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' '))
+    .sort();
+  const unique=[...new Set(names)];
+  alert('Valid node names for Google Sheets (From/To columns):\n\n'+unique.join('\n')+
+    '\n\nTip: names are case-insensitive');
 }
 
 document.fonts.ready.then(render);
