@@ -1040,9 +1040,10 @@ function renderAllocPanel(a){
   h+=a.fromCond&&a.fromCond!=='None'?`<div class="pc">${a.fromCond}</div>`:'<p class="pnc">No conditions — all records included</p>';
   h+=`<div class="psl">To conditions</div>`;
   h+=a.toCond&&a.toCond!=='None'?`<div class="pc">${a.toCond}</div>`:'<p class="pnc">No conditions on destination</p>';
-  h+=`<div class="psl" style="margin-top:16px">Notes <span style="font-size:9px;color:#a08070;font-weight:400">(shared — saved to Google Sheets)</span></div>`;
-  h+=`<textarea class="notes-area" id="note-ta-${a.id}" placeholder="Add notes for your team...">${a.notes||''}</textarea>`;
-  h+=`<div class="notes-row"><button class="notes-save-btn" onclick="saveAllocNote('${a.id}')">💾 Save Note</button><span class="notes-saved-msg" id="note-saved-${a.id}">✓ Saved to Sheet</span></div>`;
+  h+=`<div class="psl" style="margin-top:16px">Notes <span style="font-size:9px;color:#a08070;font-weight:400">(from Google Sheets column H)</span></div>`;
+  h+=a.notes
+    ?`<div class="pf" style="background:#fefce8;border-color:#fde68a;color:#78350f">${a.notes}</div>`
+    :`<p class="pnc">No notes — add them in Google Sheets column H</p>`;
   document.getElementById('panel-body').innerHTML=h;
 }
 
@@ -1375,6 +1376,12 @@ async function syncFromSheets(){
       sheetRows.push(row);
     }
 
+    // Remove any dynamically-added allocs from previous syncs
+    // (they'll be re-created fresh from sheet data)
+    for(let i=ALLOCS.length-1;i>=0;i--){
+      if(ALLOCS[i]._dynamic) ALLOCS.splice(i,1);
+    }
+
     // Load saved notes from localStorage (in case sheet notes not yet populated)
     let savedNotes={};
     try{const d=localStorage.getItem(NOTES_KEY);if(d) savedNotes=JSON.parse(d);}catch(e){}
@@ -1404,6 +1411,35 @@ async function syncFromSheets(){
       if(!alloc&&fromNode&&toNode){
         const cands=ALLOCS.filter(a=>a.from===fromNode.id&&a.to===toNode.id);
         if(cands.length===1) alloc=cands[0];
+        else if(cands.length>1){
+          // Try partial name match
+          alloc=cands.find(a=>
+            a.name.toLowerCase().includes(csvName)||
+            csvName.includes(a.name.toLowerCase())
+          );
+        }
+      }
+
+      // IMPORTANT: only create dynamic alloc if truly new.
+      // If ANY existing (non-dynamic) hardcoded alloc has the same from+to,
+      // we do NOT create a new arrow — we only update existing ones.
+      // New dynamic arrows are only for completely new node pairs not in the code.
+      if(!alloc){
+        const hasHardcoded=ALLOCS.some(a=>
+          !a._dynamic&&
+          a.from===(fromNode?.id)&&
+          a.to===(toNode?.id)
+        );
+        // Also check name-based duplicate across all allocs
+        const nameExists=ALLOCS.some(a=>{
+          const fn=N[a.from]?.lbl.join(' ').toLowerCase()||a.from.toLowerCase();
+          const tn=N[a.to]?.lbl.join(' ').toLowerCase()||a.to.toLowerCase();
+          return fn===csvFrom&&tn===csvTo&&a.name.toLowerCase()===csvName;
+        });
+        if(nameExists) return; // exact duplicate — skip entirely
+        // Only create new arrow if this is a genuinely new node pair
+        // (no hardcoded allocs between these nodes at all)
+        if(hasHardcoded) return; // existing node pair — update only, no new arrows
       }
 
       if(alloc){
@@ -1492,26 +1528,6 @@ function saveModelNotes(){
 }
 
 
-// ── ALLOC NOTES (shared via Google Sheets) ────────────────────
-function saveAllocNote(allocId){
-  const ta=document.getElementById('note-ta-'+allocId);
-  if(!ta) return;
-  const noteText=ta.value.trim();
-  // Update in-memory alloc
-  const a=ALLOCS.find(x=>x.id===allocId);
-  if(a) a.notes=noteText;
-  // Save to NOTES_KEY for persistence between syncs
-  try{
-    const d=localStorage.getItem(NOTES_KEY);
-    const obj=d?JSON.parse(d):{};
-    obj[allocId]=noteText;
-    localStorage.setItem(NOTES_KEY,JSON.stringify(obj));
-  }catch(e){}
-  const msg=document.getElementById('note-saved-'+allocId);
-  if(msg){msg.style.display='inline';setTimeout(()=>msg.style.display='none',2000);}
-  // Re-render any open node panel to reflect note change
-  if(selN) renderNodePanel(selN);
-}
 
 
 // ── LAYOUT SHEET SYNC ─────────────────────────────────────────
