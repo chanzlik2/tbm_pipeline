@@ -151,7 +151,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f8f5f0;color:#1e293b;ov
   <div id="header">
     <div>
       <h1>Raymond James — TBM Datalink Pipeline</h1>
-      <p>Hover any line for quick summary · Click any line or node for details · Edit mode: drag nodes, line elbows, or endpoint dots</p>
+      <p>Hover any line for quick summary · Click any line or node for details · Edit mode: drag nodes, line elbows, or endpoint dots · Sheet columns: A=ID, B=From, C=To, D=Name, E=FromCond, F=ToCond, G=Overview, H=Layman, I=Notes, J=Color</p>
     </div>
     <div class="legend">
       <div class="leg"><div class="leg-line" style="background:#7c3aed"></div>→ Consumption</div>
@@ -803,6 +803,7 @@ recomputeAll();
 // LINE COLOR
 // ═══════════════════════════════════════════
 function lc(a){
+  if(a.colorOverride) return a.colorOverride;
   if(a.to==='consumption') return '#7c3aed';
   if(a.to==='itrt'||a.from==='itrt') return '#0d9488';
   if(a.to==='biz_svcs') return '#d97706';
@@ -874,7 +875,7 @@ function lhex(hex,a){
 function drawNode(n,hl,selected){
   ctx.shadowColor=selected?'#2563eb':hl?'#94a3b8':'transparent';
   ctx.shadowBlur=selected?14:hl?8:0;
-  ctx.fillStyle=n.col;
+  ctx.fillStyle=n.colorOverride||n.col;
   ctx.strokeStyle=selected?'#2563eb':hl?lhex(n.col,60):'rgba(0,0,0,0.18)';
   ctx.lineWidth=selected?2.5:hl?1.5:1;
   rrect(n.x,n.y,n.w,n.h,7);ctx.fill();ctx.stroke();
@@ -1029,10 +1030,13 @@ function renderAllocPanel(a){
   document.getElementById('panel-title').textContent=a.name;
   document.getElementById('panel-type').textContent='Allocation rule';
   const fn=N[a.from],tn=N[a.to];
+  const arrowColor=a.colorOverride||lc(a);
   let h=`<div class="pft">
     <span class="pbf">${fn?.lbl.join(' ')||a.from}</span>
-    <span class="parr">→</span>
+    <span class="parr" style="color:${arrowColor}">→</span>
     <span class="pbt">${tn?.lbl.join(' ')||a.to}</span>
+    <span style="display:inline-block;width:14px;height:14px;background:${arrowColor};border-radius:3px;margin-left:6px;vertical-align:middle;border:1px solid rgba(0,0,0,.1)" title="Arrow color: ${arrowColor}"></span>
+    ${a.colorOverride?`<span style="font-size:9px;color:#a08070;margin-left:4px">${a.colorOverride} (custom)</span>`:`<span style="font-size:9px;color:#a08070;margin-left:4px">default color</span>`}
   </div>`;
   h+=`<div class="psl">Technical overview</div><div class="pf">${a.overview||'—'}</div>`;
   h+=`<div class="psl">In plain terms</div><div class="pf pfl">${a.layman||'—'}</div>`;
@@ -1349,19 +1353,20 @@ async function syncFromSheets(){
     const lines=text.split(/\r?\n/).filter(l=>l.trim());
     if(lines.length<2) throw new Error('Sheet appears empty');
 
-    // Parse headers — normalize to lowercase
+    // Parse headers — normalize to our field names
     const rawHeaders=parseCSVLine(lines[0]);
     const headers=rawHeaders.map(h=>{
-      const lc=h.toLowerCase().trim();
+      const lc=h.toLowerCase().trim().replace(/"/g,'');
       const map={
-        'from (source object)':'from','to (destination object)':'to',
-        'allocation name':'name','from conditions':'fromcond',
-        'to conditions':'tocond',
-        'allocation overview / strategy / purpose':'overview',
-        "layman's summary (elevator pitch)":'layman',
-        'from':'from','to':'to','name':'name',
-        'fromcond':'fromcond','tocond':'tocond',
-        'overview':'overview','layman':'layman','notes':'notes'
+        'allocation id':'sheetId','id':'sheetId',
+        'from (source object)':'from','from':'from',
+        'to (destination object)':'to','to':'to',
+        'allocation name':'name','name':'name',
+        'from conditions':'fromCond','fromcond':'fromCond',
+        'to conditions':'toCond','tocond':'toCond',
+        'allocation overview / strategy / purpose':'overview','overview':'overview',
+        "layman's summary (elevator pitch)":'layman','layman':'layman',
+        'notes':'notes','color':'color','arrow color':'color'
       };
       return map[lc]||lc;
     });
@@ -1370,109 +1375,101 @@ async function syncFromSheets(){
     const sheetRows=[];
     for(let i=1;i<lines.length;i++){
       const cols=parseCSVLine(lines[i]);
-      if(!cols.some(c=>c)) continue;
+      if(!cols.some(c=>c.replace(/"/g,'').trim())) continue;
       const row={};
-      headers.forEach((h,idx)=>{row[h]=(cols[idx]||'').trim();});
-      sheetRows.push(row);
+      headers.forEach((h,idx)=>{row[h]=(cols[idx]||'').replace(/"/g,'').trim();});
+      if(row.name||row.from||row.to) sheetRows.push(row);
     }
 
-    // Remove any dynamically-added allocs from previous syncs
-    // (they'll be re-created fresh from sheet data)
+    // Remove stale dynamic allocs from previous syncs
     for(let i=ALLOCS.length-1;i>=0;i--){
       if(ALLOCS[i]._dynamic) ALLOCS.splice(i,1);
     }
 
-    // Load saved notes from localStorage (in case sheet notes not yet populated)
-    let savedNotes={};
-    try{const d=localStorage.getItem(NOTES_KEY);if(d) savedNotes=JSON.parse(d);}catch(e){}
+    // Build lookup maps for fast matching
+    const allocById={};   // sheetId → alloc
+    const allocByKey={};  // from+to+name → alloc
+    ALLOCS.forEach(a=>{
+      if(a.sheetId) allocById[a.sheetId]=a;
+      const fn=N[a.from]?.lbl.join(' ').toLowerCase()||a.from.toLowerCase();
+      const tn=N[a.to]?.lbl.join(' ').toLowerCase()||a.to.toLowerCase();
+      allocByKey[fn+'|'+tn+'|'+a.name.toLowerCase()]=a;
+    });
 
-    // Track which alloc IDs we've seen (to detect new ones)
-    const existingIds=new Set(ALLOCS.map(a=>a.id));
     let updated=0, added=0;
 
     sheetRows.forEach(row=>{
-      if(!row.from||!row.to||!row.name) return;
+      if(!row.name||!row.from||!row.to) return;
       const csvFrom=row.from.trim().toLowerCase();
       const csvTo=row.to.trim().toLowerCase();
       const csvName=row.name.trim().toLowerCase();
 
-      // Find matching node IDs
-      const fromNode=NODES.find(n=>n.lbl.join(' ').toLowerCase()===csvFrom||n.id.toLowerCase()===csvFrom);
-      const toNode=NODES.find(n=>n.lbl.join(' ').toLowerCase()===csvTo||n.id.toLowerCase()===csvTo);
+      // Find nodes
+      const fromNode=NODES.find(n=>
+        n.lbl.join(' ').toLowerCase()===csvFrom||
+        n.id.toLowerCase()===csvFrom
+      );
+      const toNode=NODES.find(n=>
+        n.lbl.join(' ').toLowerCase()===csvTo||
+        n.id.toLowerCase()===csvTo
+      );
 
-      // Try to match existing alloc
-      let alloc=ALLOCS.find(a=>{
-        const fn=N[a.from]?.lbl.join(' ').toLowerCase()||a.from.toLowerCase();
-        const tn=N[a.to]?.lbl.join(' ').toLowerCase()||a.to.toLowerCase();
-        return fn===csvFrom&&tn===csvTo&&a.name.toLowerCase()===csvName;
-      });
-
-      // Fallback: match by from+to if unique
+      // Match priority: 1) sheet ID, 2) from+to+name, 3) from+to (unique pair only)
+      let alloc=null;
+      if(row.sheetId&&allocById[row.sheetId]){
+        alloc=allocById[row.sheetId];
+      } else {
+        const key=csvFrom+'|'+csvTo+'|'+csvName;
+        alloc=allocByKey[key];
+      }
+      // Fallback: unique from+to pair only (never match if multiple exist)
       if(!alloc&&fromNode&&toNode){
-        const cands=ALLOCS.filter(a=>a.from===fromNode.id&&a.to===toNode.id);
+        const cands=ALLOCS.filter(a=>a.from===fromNode.id&&a.to===toNode.id&&!a._dynamic);
         if(cands.length===1) alloc=cands[0];
-        else if(cands.length>1){
-          // Try partial name match
-          alloc=cands.find(a=>
-            a.name.toLowerCase().includes(csvName)||
-            csvName.includes(a.name.toLowerCase())
-          );
-        }
+        // If multiple hardcoded allocs exist for this pair, don't guess
       }
 
-      // IMPORTANT: only create dynamic alloc if truly new.
-      // If ANY existing (non-dynamic) hardcoded alloc has the same from+to,
-      // we do NOT create a new arrow — we only update existing ones.
-      // New dynamic arrows are only for completely new node pairs not in the code.
-      if(!alloc){
+      if(alloc){
+        // Update existing alloc
+        if(row.sheetId) alloc.sheetId=row.sheetId;
+        if(row.name)     alloc.name    =row.name;
+        if(row.overview) alloc.overview=row.overview;
+        if(row.layman)   alloc.layman  =row.layman;
+        if(row.fromCond) alloc.fromCond=row.fromCond;
+        if(row.toCond)   alloc.toCond  =row.toCond;
+        alloc.notes=row.notes||'';
+        if(row.color&&row.color.startsWith('#')) alloc.colorOverride=row.color;
+        else alloc.colorOverride=null;
+        updated++;
+      } else if(fromNode&&toNode){
+        // NEW allocation — only create if this is a brand new node pair
+        // OR if sheet has an explicit ID proving it's intentionally new
         const hasHardcoded=ALLOCS.some(a=>
-          !a._dynamic&&
-          a.from===(fromNode?.id)&&
-          a.to===(toNode?.id)
+          !a._dynamic&&a.from===fromNode.id&&a.to===toNode.id
         );
-        // Also check name-based duplicate across all allocs
         const nameExists=ALLOCS.some(a=>{
           const fn=N[a.from]?.lbl.join(' ').toLowerCase()||a.from.toLowerCase();
           const tn=N[a.to]?.lbl.join(' ').toLowerCase()||a.to.toLowerCase();
           return fn===csvFrom&&tn===csvTo&&a.name.toLowerCase()===csvName;
         });
-        if(nameExists) return; // exact duplicate — skip entirely
-        // Only create new arrow if this is a genuinely new node pair
-        // (no hardcoded allocs between these nodes at all)
-        if(hasHardcoded) return; // existing node pair — update only, no new arrows
-      }
-
-      if(alloc){
-        // Update existing alloc fields
-        if(row.name)     alloc.name    =row.name;
-        if(row.overview) alloc.overview=row.overview;
-        if(row.layman)   alloc.layman  =row.layman;
-        if(row.fromcond) alloc.fromCond=row.fromcond;
-        if(row.tocond)   alloc.toCond  =row.tocond;
-        // Notes: use sheet value if present, else localStorage
-        alloc.notes=row.notes||(savedNotes[alloc.id]||'');
-        updated++;
-      } else if(fromNode&&toNode){
-        // NEW allocation — create it dynamically!
-        const newId='sheet_'+(row.name||'').replace(/[^a-z0-9]/gi,'_').toLowerCase().slice(0,30)+'_'+Date.now();
-        const newAlloc={
-          id:newId,
-          from:fromNode.id,
-          to:toNode.id,
-          name:row.name||'Unnamed',
-          fromCond:row.fromcond||'None',
-          toCond:row.tocond||'None',
-          overview:row.overview||'',
-          layman:row.layman||'',
-          notes:row.notes||'',
+        if(nameExists) return; // true duplicate — skip
+        // Allow new alloc if: has explicit sheetId OR is a genuinely new node pair
+        if(hasHardcoded&&!row.sheetId) return; // existing pair, no ID — skip to avoid duplicates
+        const newId=row.sheetId||('dyn_'+csvName.replace(/[^a-z0-9]/g,'_').slice(0,25)+'_'+Date.now());
+        ALLOCS.push({
+          id:newId, sheetId:row.sheetId||newId,
+          from:fromNode.id, to:toNode.id,
+          name:row.name, fromCond:row.fromCond||'None',
+          toCond:row.toCond||'None', overview:row.overview||'',
+          layman:row.layman||'', notes:row.notes||'',
+          colorOverride:row.color?.startsWith('#')?row.color:null,
           _pt:1,_pi:0,_dynamic:true
-        };
-        ALLOCS.push(newAlloc);
+        });
         added++;
       }
     });
 
-    // Recompute pair groups for dynamic allocs
+    // Recompute pair groups
     const pairG={};
     ALLOCS.forEach(a=>{
       const k=a.from+'→'+a.to;
@@ -1480,29 +1477,26 @@ async function syncFromSheets(){
       pairG[k].push(a.id);
     });
     ALLOCS.forEach(a=>{
-      const k=a.from+'→'+a.to;
-      a._pt=pairG[k].length;
-      a._pi=pairG[k].indexOf(a.id);
+      a._pt=pairG[a.from+'→'+a.to].length;
+      a._pi=pairG[a.from+'→'+a.to].indexOf(a.id);
     });
 
-    recomputeAll();
-    render();
+    recomputeAll(); render();
 
     const ts=new Date().toLocaleTimeString();
     let msg=`✓ Synced — ${sheetRows.length} allocations`;
     if(added>0) msg+=` · ${added} new arrow${added>1?'s':''} added`;
     msg+=` · Last sync: ${ts}`;
     setSyncState('ok',msg);
-
     if(selA) renderAllocPanel(selA);
     if(selN) renderNodePanel(selN);
 
   }catch(err){
-    if(err.message.includes('Failed to fetch')||err.message.includes('NetworkError')){
-      setSyncState('error','⚠ Could not reach Google Sheets — check permissions (Share → Anyone with link)');
-    }else{
-      setSyncState('error',`⚠ Sync error: ${err.message}`);
-    }
+    setSyncState('error',
+      err.message.includes('Failed to fetch')||err.message.includes('NetworkError')
+        ?'⚠ Could not reach Google Sheets — check Share permissions'
+        :`⚠ Sync error: ${err.message}`
+    );
   }
 }
 
@@ -1537,8 +1531,6 @@ const LAYOUT_SHEET_URL='https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02
 
 async function loadLayoutFromSheet(){
   try{
-    // Layout sheet is the second tab (gid=1 is a guess; Apps Script writes named sheet)
-    // Try fetching by sheet name
     const url='https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/gviz/tq?tqx=out:csv&sheet=Layout';
     const resp=await fetch(url);
     if(!resp.ok) return;
@@ -1549,8 +1541,8 @@ async function loadLayoutFromSheet(){
     const idIdx=headers.indexOf('id');
     const xIdx=headers.indexOf('x');
     const yIdx=headers.indexOf('y');
+    const colIdx=headers.indexOf('color');
     if(idIdx===-1||xIdx===-1||yIdx===-1) return;
-    
     let applied=0;
     for(let i=1;i<lines.length;i++){
       const cols=parseCSVLine(lines[i]);
@@ -1558,18 +1550,18 @@ async function loadLayoutFromSheet(){
       const nodeId=(cols[idIdx]||'').replace(/"/g,'').trim();
       const x=parseFloat((cols[xIdx]||'').replace(/"/g,''));
       const y=parseFloat((cols[yIdx]||'').replace(/"/g,''));
+      const color=colIdx>=0?(cols[colIdx]||'').replace(/"/g,'').trim():'';
       const node=N[nodeId];
-      if(node&&!isNaN(x)&&!isNaN(y)){node.x=x;node.y=y;applied++;}
+      if(node&&!isNaN(x)&&!isNaN(y)){
+        node.x=x; node.y=y;
+        if(color&&color.startsWith('#')) node.colorOverride=color;
+        applied++;
+      }
     }
-    
-    if(applied>0){
-      recomputeAll();
-      console.log(`Layout loaded: ${applied} nodes positioned from Google Sheets`);
-    }
-  }catch(e){
-    console.log('Layout sheet not found yet — using default positions');
-  }
+    if(applied>0){ recomputeAll(); console.log(`Layout: ${applied} nodes loaded`); }
+  }catch(e){ console.log('Layout sheet not yet available'); }
 }
+
 
 function publishLayout(){
   // Generate CSV content for Layout sheet
