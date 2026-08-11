@@ -1260,7 +1260,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape') closePanel();});
 // GOOGLE SHEETS SYNC
 // Reads from public Google Sheet on every load
 // ═══════════════════════════════════════════
-const SHEETS_CSV_URL = 'https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/export?format=csv&gid=0';
+const SHEETS_CSV_URL = 'https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/gviz/tq?tqx=out:csv&sheet=RJ+TBM+Allocation+Rules+-+ALL';
 
 function setSyncState(state, msg) {
   const bar  = document.getElementById('sync-bar');
@@ -1364,7 +1364,7 @@ async function syncFromSheets(){
     const timer=setTimeout(()=>controller.abort(),10000);
     let resp;
     try{
-      resp=await fetch('https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/export?format=csv&gid=0',
+      resp=await fetch('https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/gviz/tq?tqx=out:csv&sheet=RJ+TBM+Allocation+Rules+-+ALL',
         {signal:controller.signal});
     }catch(fetchErr){
       clearTimeout(timer);
