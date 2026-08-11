@@ -312,7 +312,7 @@ function saveNote(id){
 const ROUTES_KEY='rj_pipeline_routes_v1';
 
 const ENDPOINTS_KEY='rj_pipeline_endpoints_v1';
-let endpointOverrides={"labor_exec":{"toSide":"bottom","toFrac":0.5598739495798319,"fromSide":"top","fromFrac":1},"fal_itrt":{"toSide":"bottom","toFrac":0.27310924369747897},"tt_itrt":{"toSide":"bottom","toFrac":0.45063025210084034,"fromSide":"top","fromFrac":0.514018691588785},"vend_itrt":{"toSide":"bottom","toFrac":0.707983193277311},"labor_ext_no_tt":{"toSide":"bottom","toFrac":0.3487394957983193},"vend_mktdata":{"toSide":"bottom","toFrac":0.7510504201680672},"vend_csp":{"fromSide":"right","fromFrac":0},"ocp_dc_itrt":{"toSide":"bottom","toFrac":0.14915966386554622,"fromSide":"top","fromFrac":0.7931034482758621},"vend_apps_itrt":{"toSide":"bottom","toFrac":0.6638655462184874},"csp_google":{"toSide":"bottom","toFrac":0.8403361344537815,"fromSide":"top","fromFrac":0.21568627450980393},"csp_aws":{"toSide":"bottom","toFrac":0.9023109243697479,"fromSide":"top","fromFrac":0.7843137254901961},"labor_tt_int":{"toSide":"bottom","toFrac":0.11214953271028037},"labor_fallout":{"toSide":"bottom","toFrac":0.8878504672897196},"itrt_itmnt_svc":{"fromSide":"right","fromFrac":0,"toSide":"bottom","toFrac":0.9651162790697675},"itrt_proj_labor":{"fromSide":"top","fromFrac":0.9411764705882353},"itrt_proj_fa":{"fromSide":"top","fromFrac":0.9537815126050421},"itrt_mktdata_svc":{"fromSide":"top","fromFrac":0.007352941176470588,"toSide":"bottom","toFrac":0.040697674418604654},"itrt_amort_fa":{"toSide":"bottom","toFrac":0.5111111111111111,"fromSide":"top","fromFrac":0.10084033613445378},"itrt_direct_svc_OLD":{"fromSide":"top","fromFrac":0,"toSide":"bottom","toFrac":0},"itrt_db_service":{"fromSide":"top","fromFrac":0.3539915966386555,"toSide":"bottom","toFrac":0.0392156862745098},"proj_app_svcs":{"fromSide":"top","fromFrac":0.9019607843137255,"toSide":"bottom","toFrac":0.8614457831325302},"proj_biz":{"fromSide":"top","fromFrac":0.9607843137254902,"toSide":"bottom","toFrac":0.9069767441860465},"srv_app":{"toSide":"bottom","toFrac":0.12650602409638553,"fromSide":"top","fromFrac":0.1893939393939394},"proj_apps":{"toSide":"bottom","toFrac":0.7108433734939759,"fromSide":"top","fromFrac":0.7843137254901961},"cs_acds_c":{"toSide":"bottom","toFrac":0.060240963855421686},"itrt_db_vendor":{"toSide":"bottom","toFrac":0.30392156862745096,"fromSide":"top","fromFrac":0.38130252100840334},"itrt_direct_svc_new":{"fromSide":"right","fromFrac":0.7402607310901989,"toSide":"right","toFrac":1},"proj_db_ns":{"toSide":"bottom","toFrac":0.8333333333333334,"fromSide":"top","fromFrac":0.18627450980392157},"proj_db_excl":{"toSide":"bottom","toFrac":0.5392156862745098,"fromSide":"top","fromFrac":0.09803921568627451},"itrt_ocp_alloc":{"fromSide":"top","fromFrac":0.015756302521008403,"toSide":"bottom","toFrac":0.0872093023255814},"itrt_itmnt_sub_app":{"fromSide":"top","fromFrac":0.028361344537815126,"toSide":"bottom","toFrac":0},"hyp_fallout":{"toSide":"bottom","toFrac":0.6325301204819277},"proj_devops":{"toSide":"bottom","toFrac":0.8132530120481928,"fromSide":"top","fromFrac":0.8431372549019608},"itrt_servers_phys":{"toSide":"bottom","toFrac":0.49137931034482757,"fromSide":"top","fromFrac":0.5063025210084033},"nd_biz":{"toSide":"bottom","toFrac":0.7616279069767442,"fromSide":"top","fromFrac":0.17857142857142858},"srv_db_ent":{"toSide":"left","toFrac":0.4404760996500651,"fromSide":"left","fromFrac":0},"itrt_proj_fa_OLD":{"toSide":"bottom","toFrac":0.6470588235294118,"fromSide":"top","fromFrac":0.9275210084033614},"itrt_proj_labor_OLD":{"toSide":"bottom","toFrac":0.8333333333333334,"fromSide":"top","fromFrac":0.9086134453781513},"proj_phys":{"fromSide":"top","fromFrac":0.28431372549019607,"toSide":"bottom","toFrac":0.6810344827586207},"itrt_towers_proj_labor":{"toSide":"bottom","toFrac":0.7156862745098039,"fromSide":"top","fromFrac":0.9453781512605042},"cs_projects":{"toSide":"bottom","toFrac":1},"itrt_proj_remaining":{"fromSide":"top","fromFrac":0.9600840336134454,"toSide":"bottom","toFrac":0.08823529411764706},"itrt_towers_proj_fa":{"fromSide":"top","fromFrac":0.9810924369747899,"toSide":"bottom","toFrac":0.4019607843137255},"proj_tick":{"fromSide":"top","fromFrac":1,"toSide":"bottom","toFrac":0.5609756097560976},"proj_dc":{"fromSide":"top","fromFrac":0.5196078431372549,"toSide":"bottom","toFrac":0.9130434782608695},"proj_eud":{"fromSide":"top","fromFrac":0.4019607843137255,"toSide":"bottom","toFrac":0.9017857142857143},"nd_eud":{"toSide":"bottom","toFrac":0.11607142857142858,"fromSide":"top","fromFrac":0.45535714285714285},"itrt_cloud_cpds":{"fromSide":"top","fromFrac":0.24789915966386555},"db_sql":{"toSide":"bottom","toFrac":0,"fromSide":"top","fromFrac":0.17647058823529413},"ps_srv":{"toSide":"bottom","toFrac":0.5833333333333334,"fromSide":"top","fromFrac":0.034482758620689655},"db_oracle":{"toSide":"bottom","toFrac":0.08333333333333333,"fromSide":"top","fromFrac":0.29411764705882354},"db_enterprise":{"toSide":"bottom","toFrac":0.17424242424242425},"db_mongo":{"toSide":"bottom","toFrac":0.24242424242424243,"fromSide":"top","fromFrac":0.5},"db_exadata":{"fromSide":"top","fromFrac":0.6078431372549019,"toSide":"bottom","toFrac":0.3333333333333333},"db_nonstop":{"fromSide":"top","fromFrac":0.7058823529411765,"toSide":"bottom","toFrac":0.4015151515151515},"ps_nonstop":{"fromSide":"top","fromFrac":0.29310344827586204,"toSide":"bottom","toFrac":0.7121212121212122},"ps_hyp":{"fromSide":"top","fromFrac":0.6120689655172413},"hyp_vms_h":{"toSide":"bottom","toFrac":0.7954545454545454,"fromSide":"top","fromFrac":0.14705882352941177},"hyp_vms_nh":{"toSide":"bottom","toFrac":0.8712121212121212,"fromSide":"top","fromFrac":0.3627450980392157},"stor_srv":{"toSide":"bottom","toFrac":0.9242424242424242,"fromSide":"top","fromFrac":0.021739130434782608},"tick_srv":{"fromSide":"top","fromFrac":0.24390243902439024,"toSide":"bottom","toFrac":1},"itrt_network":{"toSide":"bottom","toFrac":0.49107142857142855,"fromSide":"top","fromFrac":0.8287815126050421},"sd_stor":{"toSide":"bottom","toFrac":0.5217391304347826},"itrt_storage":{"toSide":"bottom","toFrac":0.010869565217391304,"fromSide":"top","fromFrac":0.6186974789915967},"tick_apps":{"fromSide":"top","fromFrac":0.8902439024390244,"toSide":"bottom","toFrac":1},"eud_biz":{"toSide":"bottom","toFrac":0.8313953488372093},"ocp_itrt":{"fromSide":"top","fromFrac":0.14942528735632185,"toSide":"bottom","toFrac":0.08928571428571429},"srv_fallout":{"toSide":"bottom","toFrac":0.536144578313253,"fromSide":"top","fromFrac":0.696969696969697},"srv_exadata":{"toSide":"bottom","toFrac":0.39156626506024095,"fromSide":"top","fromFrac":0.5227272727272727},"srv_nonstop":{"toSide":"bottom","toFrac":0.25301204819277107,"fromSide":"top","fromFrac":0.3484848484848485},"nd_dc":{"toSide":"bottom","toFrac":0.29347826086956524,"fromSide":"top","fromFrac":0.75},"rack_phys":{"fromSide":"left","fromFrac":0.5079366895887587},"rack_srv_net":{"fromSide":"top","fromFrac":0.5980392156862745,"toSide":"bottom","toFrac":0.9696969696969697},"rack_stor":{"toSide":"bottom","toFrac":0.6847826086956522,"fromSide":"top","fromFrac":0.3431372549019608},"nd_storage":{"fromSide":"top","fromFrac":0.026785714285714284},"cs_fa_no_amort":{"fromSide":"top","fromFrac":0.5058139534883721},"cs_market_data":{"fromSide":"top","fromFrac":0.5058139534883721},"cs_cons_labor":{"fromSide":"top","fromFrac":0.5058139534883721},"cs_fa_amort":{"fromSide":"top","fromFrac":0.5}};
+let endpointOverrides={"labor_exec": {"toSide": "bottom", "toFrac": 0.5598739495798319, "fromSide": "top", "fromFrac": 1}, "fal_itrt": {"toSide": "bottom", "toFrac": 0.27310924369747897}, "tt_itrt": {"toSide": "bottom", "toFrac": 0.45063025210084034, "fromSide": "top", "fromFrac": 0.514018691588785}, "vend_itrt": {"toSide": "bottom", "toFrac": 0.707983193277311}, "labor_ext_no_tt": {"toSide": "bottom", "toFrac": 0.3487394957983193}, "vend_mktdata": {"toSide": "bottom", "toFrac": 0.7510504201680672}, "vend_csp": {"fromSide": "right", "fromFrac": 0}, "ocp_dc_itrt": {"toSide": "bottom", "toFrac": 0.14915966386554622, "fromSide": "top", "fromFrac": 0.7931034482758621}, "vend_apps_itrt": {"toSide": "bottom", "toFrac": 0.6638655462184874}, "csp_google": {"toSide": "bottom", "toFrac": 0.8403361344537815, "fromSide": "top", "fromFrac": 0.21568627450980393}, "csp_aws": {"toSide": "bottom", "toFrac": 0.9023109243697479, "fromSide": "top", "fromFrac": 0.7843137254901961}, "labor_tt_int": {"toSide": "bottom", "toFrac": 0.11214953271028037}, "labor_fallout": {"toSide": "bottom", "toFrac": 0.8878504672897196}, "itrt_itmnt_svc": {"fromSide": "right", "fromFrac": 0, "toSide": "bottom", "toFrac": 0.9651162790697675}, "itrt_proj_labor": {"fromSide": "top", "fromFrac": 0.9411764705882353}, "itrt_proj_fa": {"fromSide": "top", "fromFrac": 0.9537815126050421}, "itrt_mktdata_svc": {"fromSide": "top", "fromFrac": 0.007352941176470588, "toSide": "bottom", "toFrac": 0.040697674418604654}, "itrt_amort_fa": {"toSide": "bottom", "toFrac": 0.5111111111111111, "fromSide": "top", "fromFrac": 0.10084033613445378}, "itrt_direct_svc_OLD": {"fromSide": "top", "fromFrac": 0, "toSide": "bottom", "toFrac": 0}, "itrt_db_service": {"fromSide": "top", "fromFrac": 0.3539915966386555, "toSide": "bottom", "toFrac": 0.0392156862745098}, "proj_app_svcs": {"fromSide": "top", "fromFrac": 0.9019607843137255, "toSide": "bottom", "toFrac": 0.8614457831325302}, "proj_biz": {"fromSide": "top", "fromFrac": 0.9607843137254902, "toSide": "bottom", "toFrac": 0.9069767441860465}, "srv_app": {"toSide": "bottom", "toFrac": 0.12650602409638553, "fromSide": "top", "fromFrac": 0.1893939393939394}, "proj_apps": {"toSide": "bottom", "toFrac": 0.7108433734939759, "fromSide": "top", "fromFrac": 0.7843137254901961}, "cs_acds_c": {"toSide": "bottom", "toFrac": 0.060240963855421686}, "itrt_db_vendor": {"toSide": "bottom", "toFrac": 0.30392156862745096, "fromSide": "top", "fromFrac": 0.38130252100840334}, "itrt_direct_svc_new": {"fromSide": "right", "fromFrac": 0.7402607310901989, "toSide": "right", "toFrac": 1}, "proj_db_ns": {"toSide": "bottom", "toFrac": 0.8333333333333334, "fromSide": "top", "fromFrac": 0.18627450980392157}, "proj_db_excl": {"toSide": "bottom", "toFrac": 0.5392156862745098, "fromSide": "top", "fromFrac": 0.09803921568627451}, "itrt_ocp_alloc": {"fromSide": "top", "fromFrac": 0.015756302521008403, "toSide": "bottom", "toFrac": 0.0872093023255814}, "itrt_itmnt_sub_app": {"fromSide": "top", "fromFrac": 0.028361344537815126, "toSide": "bottom", "toFrac": 0}, "hyp_fallout": {"toSide": "bottom", "toFrac": 0.6325301204819277}, "proj_devops": {"toSide": "bottom", "toFrac": 0.8132530120481928, "fromSide": "top", "fromFrac": 0.8431372549019608}, "itrt_servers_phys": {"toSide": "bottom", "toFrac": 0.49137931034482757, "fromSide": "top", "fromFrac": 0.5063025210084033}, "nd_biz": {"toSide": "bottom", "toFrac": 0.7616279069767442, "fromSide": "top", "fromFrac": 0.17857142857142858}, "srv_db_ent": {"toSide": "left", "toFrac": 0.4404760996500651, "fromSide": "left", "fromFrac": 0}, "itrt_proj_fa_OLD": {"toSide": "bottom", "toFrac": 0.6470588235294118, "fromSide": "top", "fromFrac": 0.9275210084033614}, "itrt_proj_labor_OLD": {"toSide": "bottom", "toFrac": 0.8333333333333334, "fromSide": "top", "fromFrac": 0.9086134453781513}, "proj_phys": {"fromSide": "top", "fromFrac": 0.28431372549019607, "toSide": "bottom", "toFrac": 0.6810344827586207}, "itrt_towers_proj_labor": {"toSide": "bottom", "toFrac": 0.7156862745098039, "fromSide": "top", "fromFrac": 0.9453781512605042}, "cs_projects": {"toSide": "bottom", "toFrac": 1}, "itrt_proj_remaining": {"fromSide": "top", "fromFrac": 0.9600840336134454, "toSide": "bottom", "toFrac": 0.08823529411764706}, "itrt_towers_proj_fa": {"fromSide": "top", "fromFrac": 0.9810924369747899, "toSide": "bottom", "toFrac": 0.4019607843137255}, "proj_tick": {"fromSide": "top", "fromFrac": 1, "toSide": "bottom", "toFrac": 0.5609756097560976}, "proj_dc": {"fromSide": "top", "fromFrac": 0.5196078431372549, "toSide": "bottom", "toFrac": 0.9130434782608695}, "proj_eud": {"fromSide": "top", "fromFrac": 0.4019607843137255, "toSide": "bottom", "toFrac": 0.9017857142857143}, "nd_eud": {"toSide": "bottom", "toFrac": 0.11607142857142858, "fromSide": "top", "fromFrac": 0.45535714285714285}, "itrt_cloud_cpds": {"fromSide": "top", "fromFrac": 0.24789915966386555}, "db_sql": {"toSide": "bottom", "toFrac": 0, "fromSide": "top", "fromFrac": 0.17647058823529413}, "ps_srv": {"toSide": "bottom", "toFrac": 0.5833333333333334, "fromSide": "top", "fromFrac": 0.034482758620689655}, "db_oracle": {"toSide": "bottom", "toFrac": 0.08333333333333333, "fromSide": "top", "fromFrac": 0.29411764705882354}, "db_enterprise": {"toSide": "bottom", "toFrac": 0.17424242424242425}, "db_mongo": {"toSide": "bottom", "toFrac": 0.24242424242424243, "fromSide": "top", "fromFrac": 0.5}, "db_exadata": {"fromSide": "top", "fromFrac": 0.6078431372549019, "toSide": "bottom", "toFrac": 0.3333333333333333}, "db_nonstop": {"fromSide": "top", "fromFrac": 0.7058823529411765, "toSide": "bottom", "toFrac": 0.4015151515151515}, "ps_nonstop": {"fromSide": "top", "fromFrac": 0.29310344827586204, "toSide": "bottom", "toFrac": 0.7121212121212122}, "ps_hyp": {"fromSide": "top", "fromFrac": 0.6120689655172413}, "hyp_vms_h": {"toSide": "bottom", "toFrac": 0.7954545454545454, "fromSide": "top", "fromFrac": 0.14705882352941177}, "hyp_vms_nh": {"toSide": "bottom", "toFrac": 0.8712121212121212, "fromSide": "top", "fromFrac": 0.3627450980392157}, "stor_srv": {"toSide": "bottom", "toFrac": 0.9242424242424242, "fromSide": "top", "fromFrac": 0.021739130434782608}, "tick_srv": {"fromSide": "top", "fromFrac": 0.24390243902439024, "toSide": "bottom", "toFrac": 1}, "itrt_network": {"toSide": "bottom", "toFrac": 0.49107142857142855, "fromSide": "top", "fromFrac": 0.8287815126050421}, "sd_stor": {"toSide": "bottom", "toFrac": 0.5217391304347826}, "itrt_storage": {"toSide": "bottom", "toFrac": 0.010869565217391304, "fromSide": "top", "fromFrac": 0.6186974789915967}, "tick_apps": {"fromSide": "top", "fromFrac": 0.8902439024390244, "toSide": "bottom", "toFrac": 1}, "eud_biz": {"toSide": "bottom", "toFrac": 0.8313953488372093}, "ocp_itrt": {"fromSide": "top", "fromFrac": 0.14942528735632185, "toSide": "bottom", "toFrac": 0.08928571428571429}, "srv_fallout": {"toSide": "bottom", "toFrac": 0.536144578313253, "fromSide": "top", "fromFrac": 0.696969696969697}, "srv_exadata": {"toSide": "bottom", "toFrac": 0.39156626506024095, "fromSide": "top", "fromFrac": 0.5227272727272727}, "srv_nonstop": {"toSide": "bottom", "toFrac": 0.25301204819277107, "fromSide": "top", "fromFrac": 0.3484848484848485}, "nd_dc": {"toSide": "bottom", "toFrac": 0.29347826086956524, "fromSide": "top", "fromFrac": 0.75}, "rack_phys": {"fromSide": "left", "fromFrac": 0.5079366895887587}, "rack_srv_net": {"fromSide": "top", "fromFrac": 0.5980392156862745, "toSide": "bottom", "toFrac": 0.9696969696969697}, "rack_stor": {"toSide": "bottom", "toFrac": 0.6847826086956522, "fromSide": "top", "fromFrac": 0.3431372549019608}, "nd_storage": {"fromSide": "top", "fromFrac": 0.026785714285714284}, "cs_fa_no_amort": {"fromSide": "top", "fromFrac": 0.5058139534883721}, "cs_market_data": {"fromSide": "top", "fromFrac": 0.5058139534883721}, "cs_cons_labor": {"fromSide": "top", "fromFrac": 0.5058139534883721}, "cs_fa_amort": {"fromSide": "top", "fromFrac": 0.5}};;
 // fracs are 0..1 along the node's attachment edge
 
 function loadEndpointOverrides(){
@@ -323,7 +323,7 @@ function saveEndpointOverrides(){
 }
 loadEndpointOverrides();
 
-let routeOverrides={"cs_projects":{"yOff":157},"labor_ext_no_tt":{"yOff":58},"vend_apps_itrt":{},"fal_itrt":{},"labor_exec":{"yOff":58},"ocp_dc_itrt":{},"csp_aws":{},"csp_google":{},"itrt_proj_fa":{},"itrt_amort_fa":{},"proj_app_svcs":{"yOff":-220},"itrt_direct_svc_OLD":{"yOff":-379},"itrt_cloud_cpds":{},"proj_db_excl":{"yOff":19},"proj_db_ns":{"yOff":9},"itrt_mktdata_svc":{"yOff":-369},"itrt_ocp_alloc":{"yOff":-360},"itrt_itmnt_sub_app":{"yOff":-264},"cs_acds_c":{"yOff":-105},"proj_biz":{"yOff":-329},"itrt_itmnt_svc":{"xOff":427},"itrt_direct_svc_new":{"xOff":421},"srv_db_ent":{"xOff":-36},"nd_biz":{"yOff":-269},"itrt_network":{},"itrt_proj_labor_OLD":{"yOff":0},"itrt_proj_fa_OLD":{},"itrt_towers_proj_labor":{},"itrt_proj_remaining":{},"itrt_towers_proj_fa":{},"proj_tick":{},"proj_dc":{},"proj_eud":{"yOff":9},"db_sql":{},"ps_srv":{},"proj_apps":{"yOff":-204},"db_oracle":{},"tick_apps":{"yOff":-165},"proj_devops":{"yOff":-212},"hyp_fallout":{"yOff":-30},"hyp_vms_h":{"yOff":13},"tick_srv":{"yOff":-105},"proj_phys":{"yOff":63},"eud_biz":{"yOff":-237},"nd_dc":{},"hyp_vms_nh":{"yOff":6},"rack_srv_net":{"yOff":-42},"itrt_storage":{"yOff":-117},"rack_stor":{},"stor_srv":{},"cs_fa_amort":{"yOff":1},"cs_fa_no_amort":{"yOff":1},"cs_overhead":{"yOff":1},"opex_var_cs":{"yOff":0}};
+let routeOverrides={"cs_projects": {"yOff": 157}, "labor_ext_no_tt": {"yOff": 58}, "vend_apps_itrt": {}, "fal_itrt": {}, "labor_exec": {"yOff": 58}, "ocp_dc_itrt": {}, "csp_aws": {}, "csp_google": {}, "itrt_proj_fa": {}, "itrt_amort_fa": {}, "proj_app_svcs": {"yOff": -220}, "itrt_direct_svc_OLD": {"yOff": -379}, "itrt_cloud_cpds": {}, "proj_db_excl": {"yOff": 19}, "proj_db_ns": {"yOff": 9}, "itrt_mktdata_svc": {"yOff": -369}, "itrt_ocp_alloc": {"yOff": -360}, "itrt_itmnt_sub_app": {"yOff": -264}, "cs_acds_c": {"yOff": -105}, "proj_biz": {"yOff": -329}, "itrt_itmnt_svc": {"xOff": 427}, "itrt_direct_svc_new": {"xOff": 421}, "srv_db_ent": {"xOff": -36}, "nd_biz": {"yOff": -269}, "itrt_network": {}, "itrt_proj_labor_OLD": {"yOff": 0}, "itrt_proj_fa_OLD": {}, "itrt_towers_proj_labor": {}, "itrt_proj_remaining": {}, "itrt_towers_proj_fa": {}, "proj_tick": {}, "proj_dc": {}, "proj_eud": {"yOff": 9}, "db_sql": {}, "ps_srv": {}, "proj_apps": {"yOff": -204}, "db_oracle": {}, "tick_apps": {"yOff": -165}, "proj_devops": {"yOff": -212}, "hyp_fallout": {"yOff": -30}, "hyp_vms_h": {"yOff": 13}, "tick_srv": {"yOff": -105}, "proj_phys": {"yOff": 63}, "eud_biz": {"yOff": -237}, "nd_dc": {}, "hyp_vms_nh": {"yOff": 6}, "rack_srv_net": {"yOff": -42}, "itrt_storage": {"yOff": -117}, "rack_stor": {}, "stor_srv": {}, "cs_fa_amort": {"yOff": 1}, "cs_fa_no_amort": {"yOff": 1}, "cs_overhead": {"yOff": 1}, "opex_var_cs": {"yOff": 0}};
 
 function loadRouteOverrides(){
   try{const d=localStorage.getItem(ROUTES_KEY);if(d) routeOverrides=JSON.parse(d);}catch(e){}
@@ -335,107 +335,43 @@ loadRouteOverrides();
 
 const LS_KEY='rj_pipeline_layout_v1';
 
-// Your custom layout positions (baked in from snapshot 2026-08-11)
+// Layout positions from snapshot 2026-08-11 (v2)
 const BAKED_LAYOUT = {
-  "acds": {
-    "x": 463,
-    "y": 408
-  },
-  "applications": {
-    "x": 474,
-    "y": 341
+  "consumption": {
+    "x": 490,
+    "y": 40
   },
   "biz_svcs": {
     "x": 460,
     "y": 210
   },
-  "cloud_sp": {
-    "x": 887,
-    "y": 1158
+  "rj_tower_svc": {
+    "x": 734,
+    "y": 174
+  },
+  "applications": {
+    "x": 474,
+    "y": 341
+  },
+  "acds": {
+    "x": 463,
+    "y": 408
   },
   "cloud_svcs": {
     "x": 289,
     "y": 738
   },
-  "consumption": {
-    "x": 490,
-    "y": 40
-  },
-  "cost_source": {
-    "x": 450,
-    "y": 1430
-  },
-  "cpds": {
-    "x": 285,
-    "y": 827
-  },
-  "data_centers": {
-    "x": 1027,
-    "y": 769
-  },
-  "databases": {
-    "x": 441,
-    "y": 831
-  },
-  "eud": {
-    "x": 880,
-    "y": 770
-  },
-  "fa_amort_obj": {
-    "x": 160,
-    "y": 829
-  },
-  "fixed_asset_ledger": {
-    "x": 327,
-    "y": 1242
+  "servers": {
+    "x": 460,
+    "y": 537
   },
   "hypervisor": {
     "x": 604,
     "y": 636
   },
-  "itrt": {
-    "x": 109,
-    "y": 1034
-  },
-  "labor": {
-    "x": 496,
-    "y": 1249
-  },
-  "network_devices": {
-    "x": 842,
-    "y": 852
-  },
-  "opex_fixed": {
-    "x": 413,
-    "y": 1517
-  },
-  "opex_var": {
-    "x": 570,
-    "y": 1516
-  },
-  "other_cost_pools": {
-    "x": 182,
-    "y": 1242
-  },
   "phys_server": {
     "x": 534,
     "y": 704
-  },
-  "projects": {
-    "x": 1058,
-    "y": 936
-  },
-  "rj_dc_rack": {
-    "x": 1009,
-    "y": 700
-  },
-  "rj_tower_svc": {
-    "x": 734,
-    "y": 174
-  },
-  "servers": {
-    "x": 460,
-    "y": 537
   },
   "storage": {
     "x": 742,
@@ -445,17 +381,81 @@ const BAKED_LAYOUT = {
     "x": 735,
     "y": 747
   },
+  "databases": {
+    "x": 441,
+    "y": 831
+  },
+  "cpds": {
+    "x": 285,
+    "y": 827
+  },
+  "fa_amort_obj": {
+    "x": 160,
+    "y": 829
+  },
   "tickets": {
     "x": 1178,
     "y": 809
+  },
+  "eud": {
+    "x": 880,
+    "y": 770
+  },
+  "data_centers": {
+    "x": 1027,
+    "y": 769
+  },
+  "network_devices": {
+    "x": 842,
+    "y": 852
+  },
+  "projects": {
+    "x": 1058,
+    "y": 936
+  },
+  "rj_dc_rack": {
+    "x": 1009,
+    "y": 700
+  },
+  "itrt": {
+    "x": 109,
+    "y": 1034
   },
   "time_tracking": {
     "x": 484,
     "y": 1137
   },
+  "labor": {
+    "x": 496,
+    "y": 1249
+  },
   "vendors": {
     "x": 742,
     "y": 1249
+  },
+  "fixed_asset_ledger": {
+    "x": 327,
+    "y": 1242
+  },
+  "other_cost_pools": {
+    "x": 182,
+    "y": 1242
+  },
+  "cloud_sp": {
+    "x": 887,
+    "y": 1158
+  },
+  "cost_source": {
+    "x": 450,
+    "y": 1430
+  },
+  "opex_fixed": {
+    "x": 413,
+    "y": 1517
+  },
+  "opex_var": {
+    "x": 570,
+    "y": 1516
   }
 };
 
