@@ -1462,29 +1462,9 @@ function saveAllocNote(allocId){
 const LAYOUT_SHEET_URL='https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/export?format=csv&sheet=Layout&gid=';
 
 async function loadLayoutFromSheet(){
-  try{
-    // Try to load Layout sheet
-    const resp=await fetch('https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/export?format=csv&gid=1');
-    if(!resp.ok) return; // Layout sheet may not exist yet
-    const text=await resp.text();
-    const lines=text.split(/\r?\n/).filter(l=>l.trim());
-    if(lines.length<2) return;
-    const headers=parseCSVLine(lines[0]).map(h=>h.toLowerCase().trim());
-    const idIdx=headers.indexOf('id');
-    const xIdx=headers.indexOf('x');
-    const yIdx=headers.indexOf('y');
-    if(idIdx===-1||xIdx===-1||yIdx===-1) return;
-    for(let i=1;i<lines.length;i++){
-      const cols=parseCSVLine(lines[i]);
-      if(!cols.some(c=>c)) continue;
-      const nodeId=cols[idIdx]?.trim();
-      const x=parseFloat(cols[xIdx]);
-      const y=parseFloat(cols[yIdx]);
-      const node=N[nodeId];
-      if(node&&!isNaN(x)&&!isNaN(y)){node.x=x;node.y=y;}
-    }
-    recomputeAll();
-  }catch(e){}
+  // Disabled — layout comes from baked positions
+  // Re-enable when ready to use Google Sheets Layout tab
+  return;
 }
 
 function publishLayout(){
