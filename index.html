@@ -175,7 +175,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f8f5f0;color:#1e293b;ov
   <div id="sync-bar" class="loading">
     <span class="sync-dot loading" id="sync-dot"></span>
     <span id="sync-text">Connecting to Google Sheets...</span>
-    <button class="sync-refresh-btn" id="sync-btn" onclick="loadObjectsFromSheet().then(syncFromSheets)">↺ Sync now</button>
+    <button class="sync-refresh-btn" id="sync-btn" onclick="syncFromSheets()">↺ Sync now</button>
   </div>
   <div id="main">
     <div id="canvas-wrap"><canvas id="c" width="2275" height="2905" style="width: 1300px; height: 1660px; cursor: default;"></canvas></div>
@@ -1380,17 +1380,7 @@ const NODE_NAME_MAP={
 };
 function resolveNode(name){
   if(!name) return null;
-  const lc=name.trim().toLowerCase();
-  // 1. Hardcoded map (fast path for known nodes)
-  if(NODE_NAME_MAP[lc]) return NODE_NAME_MAP[lc];
-  // 2. Check all nodes by label or ID (handles dynamic nodes from Objects sheet)
-  const byLabel=NODES.find(n=>
-    n.lbl.join(' ').toLowerCase()===lc||
-    n.lbl.join('|').toLowerCase()===lc||
-    n.id.toLowerCase()===lc
-  );
-  if(byLabel) return byLabel.id;
-  return null;
+  return NODE_NAME_MAP[name.trim().toLowerCase()]||null;
 }
 
 // ── LEARNED SHEET ID MAPPING ──────────────────────────────────
@@ -1400,66 +1390,6 @@ const LEARNED_MAP_KEY='rj_learned_sheet_ids_v1';
 let learnedMap={};
 try{const d=localStorage.getItem(LEARNED_MAP_KEY);if(d)learnedMap=JSON.parse(d);}catch(e){}
 function saveLearnedMap(){try{localStorage.setItem(LEARNED_MAP_KEY,JSON.stringify(learnedMap));}catch(e){}}
-
-
-// ── LOAD OBJECTS (NODES) FROM GOOGLE SHEETS ───────────────────
-async function loadObjectsFromSheet(){
-  try{
-    const controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),8000);
-    let resp;
-    try{resp=await fetch('https://docs.google.com/spreadsheets/d/1ZRKo92-CySfb5y02Af-LXHcyQV190CzelpqXi7f0mlU/gviz/tq?tqx=out:csv&sheet=Objects',{signal:controller.signal});}
-    catch(fe){clearTimeout(timer);return;}
-    clearTimeout(timer);
-    if(!resp.ok) return;
-    const text=await resp.text();
-    const lines=text.split(/\r?\n/).filter(l=>l.trim());
-    if(lines.length<2) return;
-    const headers=parseCSVLine(lines[0]).map(h=>h.toLowerCase().replace(/"/g,'').trim());
-    const idIdx=headers.indexOf('node id');
-    const labelIdx=headers.indexOf('label');
-    const colorIdx=headers.indexOf('color');
-    const descIdx=headers.indexOf('description');
-    if(idIdx===-1) return;
-    let updated=0,added=0;
-    for(let i=1;i<lines.length;i++){
-      const cols=parseCSVLine(lines[i]);
-      if(!cols.some(c=>c.replace(/"/g,'').trim())) continue;
-      const get=(idx)=>idx>=0?(cols[idx]||'').replace(/"/g,'').trim():'';
-      const nodeId=get(idIdx);
-      const label=get(labelIdx);
-      const color=get(colorIdx);
-      const desc=get(descIdx);
-      if(!nodeId) continue;
-      const node=N[nodeId];
-      if(node){
-        // Update existing node properties
-        if(label){
-          // Support multi-line labels with | separator e.g. "Line 1|Line 2"
-          node.lbl=label.includes('|')?label.split('|'):[label];
-        }
-        if(color&&color.startsWith('#')) node.col=color;
-        if(desc) node.desc=desc;
-        updated++;
-      } else {
-        // New node — create dynamically with default position
-        const newNode={
-          id:nodeId,
-          lbl:label?label.split('|'):[nodeId],
-          x:300,y:300,w:160,h:40,
-          col:(color&&color.startsWith('#'))?color:'#1e3a8a',
-          badge:null,desc:desc||'',_dynamic:true
-        };
-        NODES.push(newNode);
-        N[nodeId]=newNode;
-        added++;
-      }
-    }
-    console.log('Objects sheet: '+updated+' nodes updated'+(added?' + '+added+' new':''));
-  }catch(e){
-    console.log('Objects sheet not available — using hardcoded defaults');
-  }
-}
 
 async function syncFromSheets(){
   setSyncState('loading','Loading from Google Sheets...');
@@ -1617,12 +1547,7 @@ async function syncFromSheets(){
   }
 }
 
-window.addEventListener('load',()=>{
-  setTimeout(async()=>{
-    await loadObjectsFromSheet();
-    await syncFromSheets();
-  },400);
-});
+window.addEventListener('load',()=>{setTimeout(syncFromSheets,400);});
 // loadLayoutFromSheet disabled — enable via Publish Layout when ready
 
 
@@ -1702,12 +1627,7 @@ function publishLayout(){
 }
 
 document.fonts.ready.then(render);
-window.addEventListener('load',()=>{
-  setTimeout(async()=>{
-    await loadObjectsFromSheet();
-    await syncFromSheets();
-  },400);
-});
+window.addEventListener('load',()=>{setTimeout(syncFromSheets,400);});
 </script>
 
 
